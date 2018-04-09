@@ -17,13 +17,12 @@ import (
 
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/sirupsen/logrus"
 	"github.com/cyverse-de/configurate"
-	"github.com/cyverse-de/logcabin"
 	"github.com/cyverse-de/road-runner/dcompose"
 	"github.com/cyverse-de/road-runner/fs"
 	"github.com/cyverse-de/version"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
 	"gopkg.in/cyverse-de/messaging.v4"
 	"gopkg.in/cyverse-de/model.v2"
@@ -39,8 +38,8 @@ var (
 )
 
 var log = logrus.WithFields(logrus.Fields{
-	"service": "road-runner",
-	"art-id":  "road-runner",
+	"service": "interapps-runner",
+	"art-id":  "interapps-runner",
 	"group":   "org.cyverse",
 })
 
@@ -86,8 +85,6 @@ func main() {
 		err         error
 		cfg         *viper.Viper
 	)
-
-	logcabin.Init("road-runner", "road-runner")
 
 	sigquitter := make(chan bool)
 	sighandler := InitSignalHandler()

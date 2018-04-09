@@ -337,7 +337,7 @@ func TestNew(t *testing.T) {
 	if jc == nil {
 		t.Error("New() returned nil")
 	}
-	if jc.Version != "2" {
+	if jc.Version != "2.1" {
 		t.Errorf("version was %s", jc.Version)
 	}
 }
@@ -347,7 +347,7 @@ func TestConvertStep(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	jc.ConvertStep(&testJob.Steps[0], 0, testJob.Submitter, testJob.InvocationID)
+	jc.ConvertStep(&testJob.Steps[0], 0, testJob.Submitter, testJob.InvocationID, "")
 	if len(jc.Services) != 1 {
 		t.Errorf("number of services was %d and not 1", len(jc.Services))
 	}

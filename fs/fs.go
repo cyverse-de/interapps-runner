@@ -8,8 +8,8 @@ import (
 	"os"
 	"path"
 
+	"github.com/johnworth/model"
 	"github.com/pkg/errors"
-	"gopkg.in/cyverse-de/model.v2"
 )
 
 // adapted from https://talks.golang.org/2012/10things.slide#8

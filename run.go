@@ -466,10 +466,6 @@ func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan 
 		log.Error(err) // don't need to fail, since docker-compose is *supposed* to create the network
 	}
 
-	if err = runner.pullProxyImage(dockerPath, cfg.GetString("proxy.image")); err != nil {
-		log.Error(err)
-	}
-
 	if err = runner.dockerComposePull(composePath); err != nil {
 		log.Error(err)
 		runner.status = messaging.StatusDockerPullFailed

@@ -82,7 +82,6 @@ func main() {
 		dockerCfg   = flag.String("docker-cfg", "/var/lib/condor/.docker", "The path to the .docker directory.")
 		logdriver   = flag.String("log-driver", "de-logging", "The name of the Docker log driver to use in job steps.")
 		pathprefix  = flag.String("path-prefix", "/var/lib/condor", "The path prefix for the stderr/stdout logs.")
-		proxyImg    = flag.String("proxy-image", "discoenv/cas-proxy", "The image used for the reverse proxy.")
 		err         error
 		cfg         *viper.Viper
 	)
@@ -146,7 +145,6 @@ func main() {
 	cfg.Set("docker-compose.path", *composeBin)
 	cfg.Set("docker.path", *dockerBin)
 	cfg.Set("docker.cfg", *dockerCfg)
-	cfg.Set("proxy.image", *proxyImg)
 
 	wd, err := os.Getwd()
 	if err != nil {

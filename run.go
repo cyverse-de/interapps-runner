@@ -385,6 +385,24 @@ func (r *JobRunner) pullProxyImage(dockerPath, proxyImg string) error {
 	return pullProxyCmd.Run()
 }
 
+func (r *JobRunner) createNetwork(dockerPath, networkName string) error {
+	networkCreateCmd := exec.Command(dockerPath, "network", "create", "--driver", "bridge", networkName)
+	networkCreateCmd.Env = os.Environ()
+	networkCreateCmd.Dir = r.workingDir
+	networkCreateCmd.Stdout = logWriter
+	networkCreateCmd.Stderr = logWriter
+	return networkCreateCmd.Run()
+}
+
+func (r *JobRunner) dockerComposePull(composePath string) error {
+	pullCommand := exec.Command(composePath, "-p", r.projectName, "-f", "docker-compose.yml", "pull", "--parallel")
+	pullCommand.Env = os.Environ()
+	pullCommand.Dir = r.workingDir
+	pullCommand.Stdout = logWriter
+	pullCommand.Stderr = logWriter
+	return pullCommand.Run()
+}
+
 // Run executes the job, and returns the exit code on the exit channel.
 func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan messaging.StatusCode) {
 	host, err := os.Hostname()
@@ -414,14 +432,9 @@ func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan 
 
 	networkName := fmt.Sprintf("%s_default", runner.projectName)
 	dockerPath := cfg.GetString("docker.path")
-	networkCreateCmd := exec.Command(dockerPath, "network", "create", "--driver", "bridge", networkName)
-	networkCreateCmd.Env = os.Environ()
-	networkCreateCmd.Dir = runner.workingDir
-	networkCreateCmd.Stdout = logWriter
-	networkCreateCmd.Stderr = logWriter
+	composePath := cfg.GetString("docker-compose.path")
 
-	err = networkCreateCmd.Run()
-	if err != nil {
+	if err = runner.createNetwork(dockerPath, networkName); err != nil {
 		log.Error(err) // don't need to fail, since docker-compose is *supposed* to create the network
 	}
 
@@ -429,15 +442,7 @@ func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan 
 		log.Error(err)
 	}
 
-	composePath := cfg.GetString("docker-compose.path")
-	pullCommand := exec.Command(composePath, "-p", runner.projectName, "-f", "docker-compose.yml", "pull", "--parallel")
-	pullCommand.Env = os.Environ()
-	pullCommand.Dir = runner.workingDir
-	pullCommand.Stdout = logWriter
-	pullCommand.Stderr = logWriter
-
-	err = pullCommand.Run()
-	if err != nil {
+	if err = runner.dockerComposePull(composePath); err != nil {
 		log.Error(err)
 		runner.status = messaging.StatusDockerPullFailed
 	}

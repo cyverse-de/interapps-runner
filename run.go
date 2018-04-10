@@ -376,31 +376,59 @@ func parseRepo(imagename string) string {
 	return ""
 }
 
+func (r *JobRunner) execCmd(args ...string) error {
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Env = os.Environ()
+	cmd.Dir = r.workingDir
+	cmd.Stdout = logWriter
+	cmd.Stderr = logWriter
+	return cmd.Run()
+}
+
 func (r *JobRunner) pullProxyImage(dockerPath, proxyImg string) error {
-	pullProxyCmd := exec.Command(dockerPath, "pull", proxyImg)
-	pullProxyCmd.Env = os.Environ()
-	pullProxyCmd.Dir = r.workingDir
-	pullProxyCmd.Stdout = logWriter
-	pullProxyCmd.Stderr = logWriter
-	return pullProxyCmd.Run()
+	return r.execCmd(dockerPath, "pull", proxyImg)
+}
+
+func (r *JobRunner) createProxyContainer(dockerPath, proxyImg, containerName, networkName string) error {
+	return r.execCmd(dockerPath, "create", "--name", containerName, "--network", networkName, proxyImg)
+}
+
+type proxyContainerConfig struct {
+	dockerPath    string
+	containerName string
+	backendURL    string
+	frontendURL   string
+	websocketURL  string
+	casURL        string
+	casValidate   string
+	sslCertPath   string
+	sslKeyPath    string
+}
+
+func (r *JobRunner) runProxyContainer(cfg *proxyContainerConfig) error {
+	return r.execCmd(
+		cfg.dockerPath,
+		"run",
+		"--rm",
+		"-P",
+		cfg.containerName,
+		"--backend-url", cfg.backendURL,
+		"--ws-backend-url", cfg.websocketURL,
+		"--frontend-url", cfg.frontendURL,
+		"--cas-base-url", cfg.casURL,
+		"--cas-validate", cfg.casValidate,
+		"--ssl-cert", cfg.sslCertPath,
+		"--ssl-key", cfg.sslKeyPath,
+	)
 }
 
 func (r *JobRunner) createNetwork(dockerPath, networkName string) error {
-	networkCreateCmd := exec.Command(dockerPath, "network", "create", "--driver", "bridge", networkName)
-	networkCreateCmd.Env = os.Environ()
-	networkCreateCmd.Dir = r.workingDir
-	networkCreateCmd.Stdout = logWriter
-	networkCreateCmd.Stderr = logWriter
-	return networkCreateCmd.Run()
+	return r.execCmd(dockerPath, "network", "create", "--driver", "bridge", networkName)
 }
 
 func (r *JobRunner) dockerComposePull(composePath string) error {
-	pullCommand := exec.Command(composePath, "-p", r.projectName, "-f", "docker-compose.yml", "pull", "--parallel")
-	pullCommand.Env = os.Environ()
-	pullCommand.Dir = r.workingDir
-	pullCommand.Stdout = logWriter
-	pullCommand.Stderr = logWriter
-	return pullCommand.Run()
+	return r.execCmd(composePath, "-p", r.projectName, "-f", "docker-compose.yml", "pull", "--parallel")
+
 }
 
 // Run executes the job, and returns the exit code on the exit channel.

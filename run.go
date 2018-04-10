@@ -376,6 +376,15 @@ func parseRepo(imagename string) string {
 	return ""
 }
 
+func (r *JobRunner) pullProxyImage(dockerPath, proxyImg string) error {
+	pullProxyCmd := exec.Command(dockerPath, "pull", proxyImg)
+	pullProxyCmd.Env = os.Environ()
+	pullProxyCmd.Dir = r.workingDir
+	pullProxyCmd.Stdout = logWriter
+	pullProxyCmd.Stderr = logWriter
+	return pullProxyCmd.Run()
+}
+
 // Run executes the job, and returns the exit code on the exit channel.
 func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan messaging.StatusCode) {
 	host, err := os.Hostname()
@@ -414,6 +423,10 @@ func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan 
 	err = networkCreateCmd.Run()
 	if err != nil {
 		log.Error(err) // don't need to fail, since docker-compose is *supposed* to create the network
+	}
+
+	if err = runner.pullProxyImage(dockerPath, cfg.GetString("proxy.image")); err != nil {
+		log.Error(err)
 	}
 
 	composePath := cfg.GetString("docker-compose.path")

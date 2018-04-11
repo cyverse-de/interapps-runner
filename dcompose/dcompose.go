@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/johnworth/model"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+	"gopkg.in/cyverse-de/model.v2"
 )
 
 // WORKDIR is the path to the working directory inside all of the containers

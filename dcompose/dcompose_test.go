@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/johnworth/model"
+	"gopkg.in/cyverse-de/model.v2"
 
 	yaml "gopkg.in/yaml.v2"
 )

@@ -13,15 +13,6 @@
   version = "v1"
 
 [[projects]]
-  name = "github.com/cyverse-de/road-runner"
-  packages = [
-    "dcompose",
-    "fs"
-  ]
-  revision = "23f54edc8ab3d83af423aed00d514eec09aa2b02"
-  version = "2.19.0"
-
-[[projects]]
   branch = "master"
   name = "github.com/cyverse-de/version"
   packages = ["."]
@@ -150,8 +141,8 @@
 [[projects]]
   name = "gopkg.in/cyverse-de/model.v2"
   packages = ["."]
-  revision = "13e4871be4ea0864788e272d91fa5c60eb19ed4b"
-  version = "v2.0"
+  revision = "d3d940e3fb3cdd0abebefcb582968c4e6141c8b1"
+  version = "v2.2"
 
 [[projects]]
   branch = "v2"
@@ -162,6 +153,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2703d099e5685736d929b961a732df6fbf6a60a6e960b082a2108a48be8f3b9e"
+  inputs-digest = "00baa6b540b3a12fe3b580dc63e209cd586a0dd0aff159cb4c701b2f46ca7969"
   solver-name = "gps-cdcl"
   solver-version = 1

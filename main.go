@@ -18,12 +18,12 @@ import (
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/cyverse-de/configurate"
-	"github.com/cyverse-de/road-runner/dcompose"
-	"github.com/cyverse-de/road-runner/fs"
 	"github.com/cyverse-de/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
+	"gitlab.cyverse.org/wregglej/interapps-runner/dcompose"
+	"gitlab.cyverse.org/wregglej/interapps-runner/fs"
 	"gopkg.in/cyverse-de/messaging.v4"
 	"gopkg.in/cyverse-de/model.v2"
 

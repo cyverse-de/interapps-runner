@@ -26,10 +26,6 @@
 
 
 [[constraint]]
-  name = "github.com/cyverse-de/road-runner"
-  version = "2.19.0"
-
-[[constraint]]
   branch = "master"
   name = "github.com/cyverse-de/version"
 

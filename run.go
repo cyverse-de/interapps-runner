@@ -10,12 +10,12 @@ import (
 	"path"
 	"strings"
 
+	"github.com/cyverse-de/interapps-runner/dcompose"
+	"github.com/cyverse-de/interapps-runner/fs"
 	"github.com/kr/pty"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"gitlab.cyverse.org/wregglej/interapps-runner/dcompose"
-	"gitlab.cyverse.org/wregglej/interapps-runner/fs"
 	"gopkg.in/cyverse-de/messaging.v4"
 	"gopkg.in/cyverse-de/model.v2"
 )

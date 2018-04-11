@@ -274,6 +274,10 @@ func (j *JobCompose) ConvertStep(step *model.Step, index int, user, invID, worki
 	svc := j.Services[fmt.Sprintf("step_%d", index)]
 	stepContainer := step.Component.Container
 
+	for _, cp := range step.Component.Container.Ports {
+		svc.Ports = append(svc.Ports, cp.ContainerPort)
+	}
+
 	if stepContainer.EntryPoint != "" {
 		svc.EntryPoint = stepContainer.EntryPoint
 	}

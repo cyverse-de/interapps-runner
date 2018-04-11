@@ -70,6 +70,55 @@ type CleanableJob struct {
 	LocalWorkingDir string `json:"local_working_directory"`
 }
 
+func validateInteractive(job *model.Job) error {
+	// Make sure at least one step is marked as interactive.
+	foundInteractive := false
+	for _, s := range job.Steps {
+		if s.IsInteractive {
+			foundInteractive = true
+		}
+	}
+	if !foundInteractive {
+		return errors.New("no interactive steps found in the job")
+	}
+
+	if job.InteractiveApps.ProxyImage == "" {
+		return errors.New("proxy image was not set")
+	}
+
+	if job.InteractiveApps.ProxyName == "" {
+		return errors.New("proxy name was not set")
+	}
+
+	if job.InteractiveApps.FrontendURL == "" {
+		return errors.New("frontend url was not set")
+	}
+
+	if job.InteractiveApps.CASURL == "" {
+		return errors.New("cas url was not set")
+	}
+
+	if job.InteractiveApps.CASValidate == "" {
+		return errors.New("cas validate was not set")
+	}
+
+	if job.InteractiveApps.SSLCertPath == "" {
+		return errors.New("ssl cert path was not set")
+	}
+
+	if job.InteractiveApps.SSLKeyPath == "" {
+		return errors.New("ssl key path was not set")
+	}
+
+	// Only support a single job step for now. This restriction will go away in
+	// the future.
+	if len(job.Steps) > 1 {
+		return errors.New("interactive apps only support single tool apps for now")
+	}
+
+	return nil
+}
+
 func main() {
 	var (
 		showVersion = flag.Bool("version", false, "Print the version information")
@@ -160,6 +209,12 @@ func main() {
 	// Intialize a job model from the data read from the job definition.
 	job, err = model.NewFromData(cfg, data)
 	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Make sure that the job contains enough information to allow an interactive
+	// job to run successfully.
+	if err = validateInteractive(job); err != nil {
 		log.Fatal(err)
 	}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -49,6 +50,7 @@ type JobRunner struct {
 	workingDir  string
 	projectName string
 	tmpDir      string
+	networkName string
 }
 
 // NewJobRunner creates a new JobRunner
@@ -284,6 +286,90 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 		}
 		defer stderr.Close()
 
+		// Create the reverse proxy container
+		if err = r.createProxyContainer(
+			r.cfg.GetString("docker.path"),
+			job.InteractiveApps.ProxyImage,
+			job.InteractiveApps.ProxyName,
+			r.networkName,
+		); err != nil {
+			return messaging.StatusStepFailed, errors.Wrap(err, "error creating proxy container")
+		}
+
+		//Only supporting a single port for now.
+		var containerPort string
+		if step.Component.Container.Ports[0].ContainerPort != "" {
+			containerPort = step.Component.Container.Ports[0].ContainerPort
+		}
+
+		var containerName string
+		if step.Component.Container.Name != "" {
+			containerName = step.Component.Container.Name
+		} else {
+			containerName = fmt.Sprintf("step_%d_%s", idx, job.InvocationID)
+		}
+
+		var backendURL string
+		if step.InteractiveConfig.BackendURL != "" {
+			backendURL = step.InteractiveConfig.BackendURL
+		} else {
+			if containerPort != "" {
+				backendURL = fmt.Sprintf("http://%s:%s", containerName, containerPort)
+			} else {
+				backendURL = fmt.Sprintf("http://%s", containerName)
+			}
+		}
+
+		var websocketURL string
+		if step.InteractiveConfig.WebsocketPath != "" ||
+			step.InteractiveConfig.WebsocketProto != "" ||
+			step.InteractiveConfig.WebsocketPort != "" {
+
+			burl, err := url.Parse(backendURL)
+			if err != nil {
+				return messaging.StatusStepFailed, errors.Wrapf(err, "couldn't parse URL %s", backendURL)
+			}
+
+			var wsPath, wsProto, wsPort string
+			if step.InteractiveConfig.WebsocketPath != "" {
+				wsPath = step.InteractiveConfig.WebsocketPath
+			} else {
+				wsPath = burl.Path
+			}
+
+			if step.InteractiveConfig.WebsocketProto != "" {
+				wsProto = step.InteractiveConfig.WebsocketProto
+			} else {
+				wsProto = burl.Scheme
+			}
+
+			if step.InteractiveConfig.WebsocketPort != "" {
+				wsPort = step.InteractiveConfig.WebsocketPort
+			} else {
+				wsPort = burl.Port()
+			}
+
+			burl.Path = wsPath
+			burl.Scheme = wsProto
+			if wsPort != "" {
+				burl.Host = fmt.Sprintf("%s:%s", burl.Hostname(), wsPort)
+			}
+			websocketURL = burl.String()
+		}
+
+		proxyCfg := &proxyContainerConfig{
+			backendURL:    backendURL,
+			casURL:        job.InteractiveApps.CASURL,
+			casValidate:   job.InteractiveApps.CASValidate,
+			frontendURL:   job.InteractiveApps.FrontendURL,
+			containerName: containerName,
+			dockerPath:    r.cfg.GetString("docker.path"),
+			sslKeyPath:    job.InteractiveApps.SSLKeyPath,
+			sslCertPath:   job.InteractiveApps.SSLCertPath,
+			websocketURL:  websocketURL,
+		}
+		go r.runProxyContainer(proxyCfg)
+
 		composePath := r.cfg.GetString("docker-compose.path")
 		svcname := fmt.Sprintf("step_%d", idx)
 		runCommand := exec.Command(
@@ -450,6 +536,9 @@ func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan 
 	}
 
 	runner.projectName = strings.Replace(runner.job.InvocationID, "-", "", -1)
+	runner.networkName = fmt.Sprintf("%s_default", runner.projectName)
+	dockerPath := runner.cfg.GetString("docker.path")
+	composePath := runner.cfg.GetString("docker-compose.path")
 
 	// let everyone know the job is running
 	running(runner.client, runner.job, fmt.Sprintf("Job %s is running on host %s", runner.job.InvocationID, host))
@@ -458,12 +547,13 @@ func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan 
 		log.Error(err)
 	}
 
-	networkName := fmt.Sprintf("%s_default", runner.projectName)
-	dockerPath := cfg.GetString("docker.path")
-	composePath := cfg.GetString("docker-compose.path")
-
-	if err = runner.createNetwork(dockerPath, networkName); err != nil {
+	if err = runner.createNetwork(dockerPath, runner.networkName); err != nil {
 		log.Error(err) // don't need to fail, since docker-compose is *supposed* to create the network
+	}
+
+	if err = runner.pullProxyImage(dockerPath, job.InteractiveApps.ProxyImage); err != nil {
+		log.Error(err)
+		runner.status = messaging.StatusDockerPullFailed
 	}
 
 	if err = runner.dockerComposePull(composePath); err != nil {
@@ -493,6 +583,7 @@ func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan 
 			log.Error(err)
 		}
 	}
+
 	// Only attempt to run the steps if the input downloads succeeded. No reason
 	// to run the steps if there's no/corrupted data to operate on.
 	if runner.status == messaging.Success {

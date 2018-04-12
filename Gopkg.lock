@@ -18,8 +18,8 @@
 [[projects]]
   name = "github.com/cyverse-de/model"
   packages = ["submitfile"]
-  revision = "bf8453314372d00979c0cdf7da069515acdbb6be"
-  version = "v1"
+  revision = "113ec31a835eeae946f593d79d2e1febb2127e66"
+  version = "v2.3"
 
 [[projects]]
   branch = "master"
@@ -150,8 +150,8 @@
 [[projects]]
   name = "gopkg.in/cyverse-de/model.v2"
   packages = ["."]
-  revision = "d3d940e3fb3cdd0abebefcb582968c4e6141c8b1"
-  version = "v2.2"
+  revision = "d3df3e533f048ecc78a41e1c5a42e2297ab4861b"
+  version = "v2.4"
 
 [[projects]]
   branch = "v2"

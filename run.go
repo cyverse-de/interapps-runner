@@ -286,16 +286,6 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 		}
 		defer stderr.Close()
 
-		// Create the reverse proxy container
-		if err = r.createProxyContainer(
-			r.cfg.GetString("docker.path"),
-			job.InteractiveApps.ProxyImage,
-			job.InteractiveApps.ProxyName,
-			r.networkName,
-		); err != nil {
-			return messaging.StatusStepFailed, errors.Wrap(err, "error creating proxy container")
-		}
-
 		//Only supporting a single port for now.
 		var containerPort string
 		if step.Component.Container.Ports[0].ContainerPort != "" {
@@ -363,6 +353,7 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			casValidate:   job.InteractiveApps.CASValidate,
 			frontendURL:   job.InteractiveApps.FrontendURL,
 			containerName: containerName,
+			containerImg:  job.InteractiveApps.ProxyImage,
 			dockerPath:    r.cfg.GetString("docker.path"),
 			sslKeyPath:    job.InteractiveApps.SSLKeyPath,
 			sslCertPath:   job.InteractiveApps.SSLCertPath,
@@ -482,6 +473,7 @@ func (r *JobRunner) createProxyContainer(dockerPath, proxyImg, containerName, ne
 type proxyContainerConfig struct {
 	dockerPath    string
 	containerName string
+	containerImg  string
 	backendURL    string
 	frontendURL   string
 	websocketURL  string
@@ -497,7 +489,8 @@ func (r *JobRunner) runProxyContainer(cfg *proxyContainerConfig) error {
 		"run",
 		"--rm",
 		"-P",
-		cfg.containerName,
+		"--name", cfg.containerName,
+		cfg.containerImg,
 		"--backend-url", cfg.backendURL,
 		"--ws-backend-url", cfg.websocketURL,
 		"--frontend-url", cfg.frontendURL,

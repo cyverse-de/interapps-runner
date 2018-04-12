@@ -490,6 +490,8 @@ func (r *JobRunner) runProxyContainer(cfg *proxyContainerConfig) error {
 		"--rm",
 		"-P",
 		"--name", cfg.containerName,
+		"-v", fmt.Sprintf("%s:%s", job.InteractiveApps.SSLCertPath, job.InteractiveApps.SSLCertPath),
+		"-v", fmt.Sprintf("%s:%s", job.InteractiveApps.SSLKeyPath, job.InteractiveApps.SSLKeyPath),
 		cfg.containerImg,
 		"--backend-url", cfg.backendURL,
 		"--ws-backend-url", cfg.websocketURL,

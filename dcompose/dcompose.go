@@ -276,6 +276,7 @@ func (j *JobCompose) ConvertStep(step *model.Step, index int, user, invID, worki
 
 	for _, cp := range step.Component.Container.Ports {
 		svc.Ports = append(svc.Ports, cp.ContainerPort)
+		svc.Expose = append(svc.Expose, cp.ContainerPort)
 	}
 
 	if stepContainer.EntryPoint != "" {

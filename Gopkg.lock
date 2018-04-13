@@ -13,7 +13,7 @@
     "dcompose",
     "fs"
   ]
-  revision = "e46141aec39e4c070b1ac7e0e8e7e183b47e2587"
+  revision = "36aaeff3cc3613331eb7e9e1614d5d7c9a41e891"
 
 [[projects]]
   name = "github.com/cyverse-de/model"

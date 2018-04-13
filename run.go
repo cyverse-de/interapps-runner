@@ -292,12 +292,7 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			containerPort = step.Component.Container.Ports[0].ContainerPort
 		}
 
-		var containerName string
-		if step.Component.Container.Name != "" {
-			containerName = step.Component.Container.Name
-		} else {
-			containerName = fmt.Sprintf("step_%d_%s", idx, job.InvocationID)
-		}
+		containerName := fmt.Sprintf("step_%d_%s_proxy", idx, job.InvocationID)
 
 		var backendURL string
 		if step.InteractiveConfig.BackendURL != "" {

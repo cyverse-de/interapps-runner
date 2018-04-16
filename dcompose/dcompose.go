@@ -295,10 +295,6 @@ func (j *JobCompose) ConvertStep(step *model.Step, index int, user, invID, worki
 		svc.PIDsLimit = stepContainer.PIDsLimit
 	}
 
-	if stepContainer.NetworkMode != "" {
-		svc.NetworkMode = strings.ToLower(stepContainer.NetworkMode)
-	}
-
 	// Handles volumes created by other containers.
 	for _, vf := range stepContainer.VolumesFrom {
 		containerName := fmt.Sprintf("%s-%s", vf.NamePrefix, invID)

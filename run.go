@@ -299,9 +299,9 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			backendURL = step.InteractiveConfig.BackendURL
 		} else {
 			if containerPort != "" {
-				backendURL = fmt.Sprintf("http://%s:%s", containerName, containerPort)
+				backendURL = fmt.Sprintf("http://step_%d_%s:%s", idx, job.InvocationID, containerPort)
 			} else {
-				backendURL = fmt.Sprintf("http://%s", containerName)
+				backendURL = fmt.Sprintf("http://step_%d_%s", idx, job.InvocationID)
 			}
 		}
 

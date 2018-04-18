@@ -343,7 +343,9 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			websocketURL = burl.String()
 		}
 
-		availablePort, err := AvailableTCPPort(31300, 31399)
+		lowerPort := r.cfg.GetInt("proxy.lower")
+		upperPort := r.cfg.GetInt("proxy.upper")
+		availablePort, err := AvailableTCPPort(lowerPort, upperPort)
 		if err != nil {
 			running(r.client, r.job, fmt.Sprintf("Error getting available port: %s", err.Error()))
 			return messaging.StatusStepFailed, err

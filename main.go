@@ -131,6 +131,8 @@ func main() {
 		dockerCfg   = flag.String("docker-cfg", "/var/lib/condor/.docker", "The path to the .docker directory.")
 		logdriver   = flag.String("log-driver", "de-logging", "The name of the Docker log driver to use in job steps.")
 		pathprefix  = flag.String("path-prefix", "/var/lib/condor", "The path prefix for the stderr/stdout logs.")
+		proxyUpper  = flag.Int("proxy-upper-bound", 31399, "Upper bound in port numbers that the proxy may be reached through.")
+		proxyLower  = flag.Int("proxy-lower-bound", 31300, "Lower bound in port numbers that the proxy may be reached through.")
 		err         error
 		cfg         *viper.Viper
 	)
@@ -194,6 +196,8 @@ func main() {
 	cfg.Set("docker-compose.path", *composeBin)
 	cfg.Set("docker.path", *dockerBin)
 	cfg.Set("docker.cfg", *dockerCfg)
+	cfg.Set("proxy.lower", *proxyLower)
+	cfg.Set("proxy.upper", *proxyUpper)
 
 	wd, err := os.Getwd()
 	if err != nil {

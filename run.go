@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/cyverse-de/interapps-runner/dcompose"
@@ -342,6 +343,11 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			websocketURL = burl.String()
 		}
 
+		availablePort, err := AvailableTCPPort(31300, 31399)
+		if err != nil {
+			running(r.client, r.job, fmt.Sprintf("Error getting available port: %s", err.Error()))
+			return messaging.StatusStepFailed, err
+		}
 		proxyCfg := &proxyContainerConfig{
 			backendURL:    backendURL,
 			casURL:        job.InteractiveApps.CASURL,
@@ -353,6 +359,7 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			sslKeyPath:    job.InteractiveApps.SSLKeyPath,
 			sslCertPath:   job.InteractiveApps.SSLCertPath,
 			websocketURL:  websocketURL,
+			hostPort:      strconv.Itoa(availablePort),
 		}
 		go r.runProxyContainer(proxyCfg)
 
@@ -476,6 +483,7 @@ type proxyContainerConfig struct {
 	casValidate   string
 	sslCertPath   string
 	sslKeyPath    string
+	hostPort      string
 }
 
 func (r *JobRunner) runProxyContainer(cfg *proxyContainerConfig) error {
@@ -483,8 +491,7 @@ func (r *JobRunner) runProxyContainer(cfg *proxyContainerConfig) error {
 		cfg.dockerPath,
 		"run",
 		"--rm",
-		"-p", "8080",
-		"-P",
+		"-p", fmt.Sprintf("%s:8080", cfg.hostPort),
 		"--network", r.networkName,
 		"--name", cfg.containerName,
 		"-v", fmt.Sprintf("%s:%s", job.InteractiveApps.SSLCertPath, job.InteractiveApps.SSLCertPath),

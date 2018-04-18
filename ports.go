@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"time"
 )
 
 func portOkay(port int) bool {
@@ -22,9 +23,10 @@ func AvailableTCPPort(lower, upper int) (int, error) {
 	attemptsMax := (upper - lower) + 1
 	attemptsMade := 0
 	portsTried := map[int]bool{}
+	r := rand.New(rand.NewSource(time.Now().Unix()))
 
 	for attemptsMade < attemptsMax {
-		rando := rand.Int()%(upper+1-lower) + lower
+		rando := r.Int()%(upper+1-lower) + lower
 		if !portsTried[rando] { // Don't hammer the same port multiple times.
 			if portOkay(rando) {
 				return rando, nil

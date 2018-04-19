@@ -359,6 +359,8 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			return messaging.StatusStepFailed, err
 		}
 
+		log.Printf("proxy will listen on port %d", availablePort)
+
 		proxyCfg := &proxyContainerConfig{
 			backendURL:    backendURL,
 			casURL:        job.InteractiveApps.CASURL,

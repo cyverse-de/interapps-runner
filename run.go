@@ -262,6 +262,46 @@ func parse(b64 string) (*authInfo, error) {
 	return a, err
 }
 
+func (r *JobRunner) websocketURL(step *model.Step, backendURL string) (string, error) {
+	var websocketURL string
+	if step.InteractiveConfig.WebsocketPath != "" ||
+		step.InteractiveConfig.WebsocketProto != "" ||
+		step.InteractiveConfig.WebsocketPort != "" {
+
+		burl, err := url.Parse(backendURL)
+		if err != nil {
+			return "", errors.Wrapf(err, "couldn't parse URL %s", backendURL)
+		}
+
+		var wsPath, wsProto, wsPort string
+		if step.InteractiveConfig.WebsocketPath != "" {
+			wsPath = step.InteractiveConfig.WebsocketPath
+		} else {
+			wsPath = burl.Path
+		}
+
+		if step.InteractiveConfig.WebsocketProto != "" {
+			wsProto = step.InteractiveConfig.WebsocketProto
+		} else {
+			wsProto = burl.Scheme
+		}
+
+		if step.InteractiveConfig.WebsocketPort != "" {
+			wsPort = step.InteractiveConfig.WebsocketPort
+		} else {
+			wsPort = burl.Port()
+		}
+
+		burl.Path = wsPath
+		burl.Scheme = wsProto
+		if wsPort != "" {
+			burl.Host = fmt.Sprintf("%s:%s", burl.Hostname(), wsPort)
+		}
+		websocketURL = burl.String()
+	}
+	return websocketURL, nil
+}
+
 func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 	var err error
 
@@ -306,41 +346,9 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			}
 		}
 
-		var websocketURL string
-		if step.InteractiveConfig.WebsocketPath != "" ||
-			step.InteractiveConfig.WebsocketProto != "" ||
-			step.InteractiveConfig.WebsocketPort != "" {
-
-			burl, err := url.Parse(backendURL)
-			if err != nil {
-				return messaging.StatusStepFailed, errors.Wrapf(err, "couldn't parse URL %s", backendURL)
-			}
-
-			var wsPath, wsProto, wsPort string
-			if step.InteractiveConfig.WebsocketPath != "" {
-				wsPath = step.InteractiveConfig.WebsocketPath
-			} else {
-				wsPath = burl.Path
-			}
-
-			if step.InteractiveConfig.WebsocketProto != "" {
-				wsProto = step.InteractiveConfig.WebsocketProto
-			} else {
-				wsProto = burl.Scheme
-			}
-
-			if step.InteractiveConfig.WebsocketPort != "" {
-				wsPort = step.InteractiveConfig.WebsocketPort
-			} else {
-				wsPort = burl.Port()
-			}
-
-			burl.Path = wsPath
-			burl.Scheme = wsProto
-			if wsPort != "" {
-				burl.Host = fmt.Sprintf("%s:%s", burl.Hostname(), wsPort)
-			}
-			websocketURL = burl.String()
+		websocketURL, err := r.websocketURL(&step, backendURL)
+		if err != nil {
+			return messaging.StatusStepFailed, err
 		}
 
 		lowerPort := r.cfg.GetInt("proxy.lower")
@@ -350,6 +358,7 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			running(r.client, r.job, fmt.Sprintf("Error getting available port: %s", err.Error()))
 			return messaging.StatusStepFailed, err
 		}
+
 		proxyCfg := &proxyContainerConfig{
 			backendURL:    backendURL,
 			casURL:        job.InteractiveApps.CASURL,

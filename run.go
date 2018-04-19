@@ -383,6 +383,39 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 		}
 		go r.runProxyContainer(proxyCfg)
 
+		exposerURL := r.cfg.GetString("k8s.app-exposer.base")
+		exposerHost := r.cfg.GetString("k8s.app-exposer.host-header")
+		hostIP := GetOutboundIP()
+		eptcfg := &EndpointConfig{
+			IP:   hostIP.String(),
+			Name: r.job.InvocationID,
+			Port: availablePort,
+		}
+		if err = CreateK8SEndpoint(exposerURL, exposerHost, eptcfg); err != nil {
+			running(r.client, r.job, fmt.Sprintf("Error creating K8s Endpoint: %s", err.Error()))
+			return messaging.StatusStepFailed, err
+		}
+
+		svccfg := &ServiceConfig{
+			TargetPort: availablePort,
+			Name:       r.job.InvocationID,
+			ListenPort: 80,
+		}
+		if err = CreateK8SService(exposerURL, exposerHost, svccfg); err != nil {
+			running(r.client, r.job, fmt.Sprintf("Error creating K8s Service: %s", err.Error()))
+			return messaging.StatusStepFailed, err
+		}
+
+		ingcfg := &IngressConfig{
+			Service: r.job.InvocationID,
+			Port:    80,
+			Name:    r.job.InvocationID,
+		}
+		if err = CreateK8SIngress(exposerURL, exposerHost, ingcfg); err != nil {
+			running(r.client, r.job, fmt.Sprintf("Error creating K8s Ingress: %s", err.Error()))
+			return messaging.StatusStepFailed, err
+		}
+
 		svcname := fmt.Sprintf("step_%d", idx)
 		if err = r.execDockerCompose(svcname, os.Environ(), stdout, stderr); err != nil {
 			running(r.client, r.job,

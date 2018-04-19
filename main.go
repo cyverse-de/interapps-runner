@@ -133,6 +133,8 @@ func main() {
 		pathprefix  = flag.String("path-prefix", "/var/lib/condor", "The path prefix for the stderr/stdout logs.")
 		proxyUpper  = flag.Int("proxy-upper-bound", 31399, "Upper bound in port numbers that the proxy may be reached through.")
 		proxyLower  = flag.Int("proxy-lower-bound", 31300, "Lower bound in port numbers that the proxy may be reached through.")
+		exposerURL  = flag.String("exposer-url", "", "The base URL to the app-exposer service.")
+		exposerHost = flag.String("exposer-host-header", "app-exposer", "The value of the Host header in requests to the app-exposer API.")
 		err         error
 		cfg         *viper.Viper
 	)
@@ -198,6 +200,19 @@ func main() {
 	cfg.Set("docker.cfg", *dockerCfg)
 	cfg.Set("proxy.lower", *proxyLower)
 	cfg.Set("proxy.upper", *proxyUpper)
+
+	if cfg.GetString("k8s.app-exposer.base") == "" && *exposerURL == "" {
+		log.Fatal("the exposer url must be set either in the config file or with --exposer-url")
+	}
+
+	// prefer the command-line setting over the config setting.
+	if *exposerURL != "" {
+		cfg.Set("k8s.app-exposer.base", *exposerURL)
+	}
+
+	if *exposerHost != "" {
+		cfg.Set("k8s.app-exposer.host-header", *exposerHost)
+	}
 
 	wd, err := os.Getwd()
 	if err != nil {

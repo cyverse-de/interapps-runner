@@ -496,8 +496,8 @@ func (r *JobRunner) runProxyContainer(cfg *proxyContainerConfig) error {
 		"--frontend-url", cfg.frontendURL,
 		"--cas-base-url", cfg.casURL,
 		"--cas-validate", cfg.casValidate,
-		"--ssl-cert", cfg.sslCertPath,
-		"--ssl-key", cfg.sslKeyPath,
+		// "--ssl-cert", cfg.sslCertPath,
+		// "--ssl-key", cfg.sslKeyPath,
 	)
 }
 

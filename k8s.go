@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -51,7 +52,7 @@ func postToAPI(u, host string, cfg interface{}) error {
 
 	// Make sure the Host header is set so the Ingress knows how to route the
 	// request.
-	req.Header.Set(http.CanonicalHeaderKey("host"), host)
+	req.Host = host
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -60,7 +61,12 @@ func postToAPI(u, host string, cfg interface{}) error {
 	}
 
 	if !(resp.StatusCode >= 200 && resp.StatusCode <= 299) {
-		return fmt.Errorf("status code in response was %d", resp.StatusCode)
+		respbody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("error reading response body: %s", err.Error())
+		}
+		defer resp.Body.Close()
+		return fmt.Errorf("status code in response was %d, body was: %s", resp.StatusCode, string(respbody))
 	}
 
 	return nil

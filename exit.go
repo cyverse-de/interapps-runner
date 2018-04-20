@@ -19,6 +19,20 @@ func cleanup(cfg *viper.Viper) {
 		log.Errorf("%+v\n", err)
 	}
 
+	baseURL := cfg.GetString("k8s.app-exposer.base")
+	header := cfg.GetString("k8s.app-exposer.host-header")
+	if err = DeleteK8SEndpoint(baseURL, header, job.InvocationID); err != nil {
+		log.Errorf("%+v\n", err)
+	}
+
+	if err = DeleteK8SService(baseURL, header, job.InvocationID); err != nil {
+		log.Errorf("%+v\n", err)
+	}
+
+	if err = DeleteK8SIngress(baseURL, header, job.InvocationID); err != nil {
+		log.Errorf("%+v\n", err)
+	}
+
 	netCmd := exec.Command(cfg.GetString("docker.path"), "network", "rm", fmt.Sprintf("%s_default", projName))
 	netCmd.Stderr = log.Writer()
 	netCmd.Stdout = log.Writer()

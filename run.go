@@ -334,6 +334,12 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 		}
 		defer stderr.Close()
 
+		dockerPath := r.cfg.GetString("docker.path")
+		if err = r.pullProxyImage(dockerPath, step.Component.Container.InteractiveApps.ProxyImage); err != nil {
+			log.Error(err)
+			return messaging.StatusDockerPullFailed, err
+		}
+
 		//Only supporting a single port for now.
 		var containerPort string
 		if step.Component.Container.Ports[0].ContainerPort != "" {
@@ -370,14 +376,14 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 
 		proxyCfg := &proxyContainerConfig{
 			backendURL:    backendURL,
-			casURL:        job.InteractiveApps.CASURL,
-			casValidate:   job.InteractiveApps.CASValidate,
-			frontendURL:   job.InteractiveApps.FrontendURL,
+			casURL:        step.Component.Container.InteractiveApps.CASURL,
+			casValidate:   step.Component.Container.InteractiveApps.CASValidate,
+			frontendURL:   step.Component.Container.InteractiveApps.FrontendURL,
 			containerName: containerName,
-			containerImg:  job.InteractiveApps.ProxyImage,
+			containerImg:  step.Component.Container.InteractiveApps.ProxyImage,
 			dockerPath:    r.cfg.GetString("docker.path"),
-			sslKeyPath:    job.InteractiveApps.SSLKeyPath,
-			sslCertPath:   job.InteractiveApps.SSLCertPath,
+			sslKeyPath:    step.Component.Container.InteractiveApps.SSLKeyPath,
+			sslCertPath:   step.Component.Container.InteractiveApps.SSLCertPath,
 			websocketURL:  websocketURL,
 			hostPort:      strconv.Itoa(availablePort),
 		}
@@ -521,8 +527,8 @@ func (r *JobRunner) runProxyContainer(cfg *proxyContainerConfig) error {
 		"-p", fmt.Sprintf("%s:8080", cfg.hostPort),
 		"--network", r.networkName,
 		"--name", cfg.containerName,
-		"-v", fmt.Sprintf("%s:%s", job.InteractiveApps.SSLCertPath, job.InteractiveApps.SSLCertPath),
-		"-v", fmt.Sprintf("%s:%s", job.InteractiveApps.SSLKeyPath, job.InteractiveApps.SSLKeyPath),
+		"-v", fmt.Sprintf("%s:%s", cfg.sslCertPath, cfg.sslCertPath),
+		"-v", fmt.Sprintf("%s:%s", cfg.sslKeyPath, cfg.sslKeyPath),
 		cfg.containerImg,
 		"--backend-url", cfg.backendURL,
 		"--ws-backend-url", cfg.websocketURL,
@@ -575,11 +581,6 @@ func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan 
 
 	if err = runner.createNetwork(dockerPath, runner.networkName); err != nil {
 		log.Error(err) // don't need to fail, since docker-compose is *supposed* to create the network
-	}
-
-	if err = runner.pullProxyImage(dockerPath, job.InteractiveApps.ProxyImage); err != nil {
-		log.Error(err)
-		runner.status = messaging.StatusDockerPullFailed
 	}
 
 	if err = runner.dockerComposePull(composePath); err != nil {

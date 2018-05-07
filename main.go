@@ -76,38 +76,38 @@ func validateInteractive(job *model.Job) error {
 	for _, s := range job.Steps {
 		if s.IsInteractive {
 			foundInteractive = true
+
+			if s.Component.Container.InteractiveApps.ProxyImage == "" {
+				return errors.New("proxy image was not set")
+			}
+
+			if s.Component.Container.InteractiveApps.ProxyName == "" {
+				return errors.New("proxy name was not set")
+			}
+
+			if s.Component.Container.InteractiveApps.FrontendURL == "" {
+				return errors.New("frontend url was not set")
+			}
+
+			if s.Component.Container.InteractiveApps.CASURL == "" {
+				return errors.New("cas url was not set")
+			}
+
+			if s.Component.Container.InteractiveApps.CASValidate == "" {
+				return errors.New("cas validate was not set")
+			}
+
+			if s.Component.Container.InteractiveApps.SSLCertPath == "" {
+				return errors.New("ssl cert path was not set")
+			}
+
+			if s.Component.Container.InteractiveApps.SSLKeyPath == "" {
+				return errors.New("ssl key path was not set")
+			}
 		}
 	}
 	if !foundInteractive {
 		return errors.New("no interactive steps found in the job")
-	}
-
-	if job.InteractiveApps.ProxyImage == "" {
-		return errors.New("proxy image was not set")
-	}
-
-	if job.InteractiveApps.ProxyName == "" {
-		return errors.New("proxy name was not set")
-	}
-
-	if job.InteractiveApps.FrontendURL == "" {
-		return errors.New("frontend url was not set")
-	}
-
-	if job.InteractiveApps.CASURL == "" {
-		return errors.New("cas url was not set")
-	}
-
-	if job.InteractiveApps.CASValidate == "" {
-		return errors.New("cas validate was not set")
-	}
-
-	if job.InteractiveApps.SSLCertPath == "" {
-		return errors.New("ssl cert path was not set")
-	}
-
-	if job.InteractiveApps.SSLKeyPath == "" {
-		return errors.New("ssl key path was not set")
 	}
 
 	// Only support a single job step for now. This restriction will go away in

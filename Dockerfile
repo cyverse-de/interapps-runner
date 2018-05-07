@@ -1,9 +1,9 @@
-FROM golang:1.7
+FROM golang:1.10
 
-COPY . /go/src/github.com/cyverse-de/road-runner
-RUN go install github.com/cyverse-de/road-runner
+COPY . /go/src/github.com/cyverse-de/interapps-runner
+RUN go install github.com/cyverse-de/interapps-runner
 
-ENTRYPOINT ["road-runner"]
+ENTRYPOINT ["interapps-runner"]
 CMD ["--help"]
 
 ARG git_commit=unknown
@@ -14,5 +14,5 @@ LABEL org.cyverse.git-ref="$git_commit"
 LABEL org.cyverse.version="$version"
 LABEL org.cyverse.descriptive-version="$descriptive_version"
 LABEL org.label-schema.vcs-ref="$git_commit"
-LABEL org.label-schema.vcs-url="https://github.com/cyverse-de/road-runner"
+LABEL org.label-schema.vcs-url="https://github.com/cyverse-de/interapps-runner"
 LABEL org.label-schema.version="$descriptive_version"

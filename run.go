@@ -271,9 +271,9 @@ func parse(b64 string) (*authInfo, error) {
 
 func (r *JobRunner) websocketURL(step *model.Step, backendURL string) (string, error) {
 	var websocketURL string
-	if step.InteractiveConfig.WebsocketPath != "" ||
-		step.InteractiveConfig.WebsocketProto != "" ||
-		step.InteractiveConfig.WebsocketPort != "" {
+	if step.Component.Container.InteractiveApps.WebsocketPath != "" ||
+		step.Component.Container.InteractiveApps.WebsocketProto != "" ||
+		step.Component.Container.InteractiveApps.WebsocketPort != "" {
 
 		burl, err := url.Parse(backendURL)
 		if err != nil {
@@ -281,20 +281,20 @@ func (r *JobRunner) websocketURL(step *model.Step, backendURL string) (string, e
 		}
 
 		var wsPath, wsProto, wsPort string
-		if step.InteractiveConfig.WebsocketPath != "" {
-			wsPath = step.InteractiveConfig.WebsocketPath
+		if step.Component.Container.InteractiveApps.WebsocketPath != "" {
+			wsPath = step.Component.Container.InteractiveApps.WebsocketPath
 		} else {
 			wsPath = burl.Path
 		}
 
-		if step.InteractiveConfig.WebsocketProto != "" {
-			wsProto = step.InteractiveConfig.WebsocketProto
+		if step.Component.Container.InteractiveApps.WebsocketProto != "" {
+			wsProto = step.Component.Container.InteractiveApps.WebsocketProto
 		} else {
 			wsProto = burl.Scheme
 		}
 
-		if step.InteractiveConfig.WebsocketPort != "" {
-			wsPort = step.InteractiveConfig.WebsocketPort
+		if step.Component.Container.InteractiveApps.WebsocketPort != "" {
+			wsPort = step.Component.Container.InteractiveApps.WebsocketPort
 		} else {
 			wsPort = burl.Port()
 		}
@@ -341,19 +341,19 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 		}
 
 		//Only supporting a single port for now.
-		var containerPort string
-		if step.Component.Container.Ports[0].ContainerPort != "" {
+		var containerPort int
+		if step.Component.Container.Ports[0].ContainerPort != 0 {
 			containerPort = step.Component.Container.Ports[0].ContainerPort
 		}
 
 		containerName := fmt.Sprintf("step_%d_%s_proxy", idx, job.InvocationID)
 
 		var backendURL string
-		if step.InteractiveConfig.BackendURL != "" {
-			backendURL = step.InteractiveConfig.BackendURL
+		if step.Component.Container.InteractiveApps.BackendURL != "" {
+			backendURL = step.Component.Container.InteractiveApps.BackendURL
 		} else {
-			if containerPort != "" {
-				backendURL = fmt.Sprintf("http://step_%d_%s:%s", idx, job.InvocationID, containerPort)
+			if containerPort != 0 {
+				backendURL = fmt.Sprintf("http://step_%d_%s:%d", idx, job.InvocationID, containerPort)
 			} else {
 				backendURL = fmt.Sprintf("http://step_%d_%s", idx, job.InvocationID)
 			}

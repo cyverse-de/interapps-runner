@@ -74,7 +74,7 @@ func validateInteractive(job *model.Job) error {
 	// Make sure at least one step is marked as interactive.
 	foundInteractive := false
 	for _, s := range job.Steps {
-		if s.IsInteractive {
+		if s.Component.IsInteractive {
 			foundInteractive = true
 
 			if s.Component.Container.InteractiveApps.ProxyImage == "" {

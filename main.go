@@ -84,26 +84,6 @@ func validateInteractive(job *model.Job) error {
 			if s.Component.Container.InteractiveApps.ProxyName == "" {
 				return errors.New("proxy name was not set")
 			}
-
-			if s.Component.Container.InteractiveApps.FrontendURL == "" {
-				return errors.New("frontend url was not set")
-			}
-
-			if s.Component.Container.InteractiveApps.CASURL == "" {
-				return errors.New("cas url was not set")
-			}
-
-			if s.Component.Container.InteractiveApps.CASValidate == "" {
-				return errors.New("cas validate was not set")
-			}
-
-			if s.Component.Container.InteractiveApps.SSLCertPath == "" {
-				return errors.New("ssl cert path was not set")
-			}
-
-			if s.Component.Container.InteractiveApps.SSLKeyPath == "" {
-				return errors.New("ssl key path was not set")
-			}
 		}
 	}
 	if !foundInteractive {

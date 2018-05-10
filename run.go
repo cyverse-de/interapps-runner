@@ -520,24 +520,35 @@ type proxyContainerConfig struct {
 }
 
 func (r *JobRunner) runProxyContainer(cfg *proxyContainerConfig) error {
-	return r.execCmd(
+	cmdElements := []string{
 		cfg.dockerPath,
 		"run",
 		"--rm",
 		"-p", fmt.Sprintf("%s:8080", cfg.hostPort),
 		"--network", r.networkName,
 		"--name", cfg.containerName,
-		"-v", fmt.Sprintf("%s:%s", cfg.sslCertPath, cfg.sslCertPath),
-		"-v", fmt.Sprintf("%s:%s", cfg.sslKeyPath, cfg.sslKeyPath),
+	}
+
+	lastElements := []string{
 		cfg.containerImg,
 		"--backend-url", cfg.backendURL,
 		"--ws-backend-url", cfg.websocketURL,
 		"--frontend-url", cfg.frontendURL,
 		"--cas-base-url", cfg.casURL,
 		"--cas-validate", cfg.casValidate,
-		// "--ssl-cert", cfg.sslCertPath,
-		// "--ssl-key", cfg.sslKeyPath,
-	)
+	}
+
+	if cfg.sslCertPath != "" {
+		cmdElements = append(cmdElements, "-v", fmt.Sprintf("%s:%s", cfg.sslCertPath, cfg.sslCertPath))
+		lastElements = append(lastElements, "--ssl-cert", cfg.sslCertPath)
+	}
+
+	if cfg.sslKeyPath != "" {
+		cmdElements = append(cmdElements, "-v", fmt.Sprintf("%s:%s", cfg.sslKeyPath, cfg.sslKeyPath))
+		lastElements = append(lastElements, "--ssl-key", cfg.sslKeyPath)
+	}
+
+	return r.execCmd(append(cmdElements, lastElements...)...)
 }
 
 func (r *JobRunner) createNetwork(dockerPath, networkName string) error {

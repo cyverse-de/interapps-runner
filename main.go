@@ -78,11 +78,11 @@ func validateInteractive(job *model.Job) error {
 			foundInteractive = true
 
 			if s.Component.Container.InteractiveApps.ProxyImage == "" {
-				return errors.New("proxy image was not set")
+				s.Component.Container.InteractiveApps.ProxyImage = "discoenv/cas-proxy"
 			}
 
 			if s.Component.Container.InteractiveApps.ProxyName == "" {
-				return errors.New("proxy name was not set")
+				s.Component.Container.InteractiveApps.ProxyName = fmt.Sprintf("cas-proxy-%s", job.InvocationID)
 			}
 		}
 	}

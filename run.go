@@ -416,10 +416,11 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 
 		exposerURL := r.cfg.GetString("k8s.app-exposer.base")
 		exposerHost := r.cfg.GetString("k8s.app-exposer.host-header")
+		ingressID := fmt.Sprintf("app-%s", r.job.InvocationID)
 		hostIP := GetOutboundIP()
 		eptcfg := &EndpointConfig{
 			IP:   hostIP.String(),
-			Name: fmt.Sprintf("app-%s", r.job.InvocationID),
+			Name: ingressID,
 			Port: availablePort,
 		}
 		if err = CreateK8SEndpoint(exposerURL, exposerHost, eptcfg); err != nil {
@@ -429,7 +430,7 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 
 		svccfg := &ServiceConfig{
 			TargetPort: availablePort,
-			Name:       fmt.Sprintf("app-%s", r.job.InvocationID),
+			Name:       ingressID,
 			ListenPort: 80,
 		}
 		if err = CreateK8SService(exposerURL, exposerHost, svccfg); err != nil {
@@ -438,9 +439,9 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 		}
 
 		ingcfg := &IngressConfig{
-			Service: r.job.InvocationID,
+			Service: ingressID,
 			Port:    80,
-			Name:    fmt.Sprintf("app-%s", r.job.InvocationID),
+			Name:    ingressID,
 		}
 		if err = CreateK8SIngress(exposerURL, exposerHost, ingcfg); err != nil {
 			running(r.client, r.job, fmt.Sprintf("Error creating K8s Ingress: %s", err.Error()))

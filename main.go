@@ -73,16 +73,16 @@ type CleanableJob struct {
 func validateInteractive(job *model.Job) error {
 	// Make sure at least one step is marked as interactive.
 	foundInteractive := false
-	for _, s := range job.Steps {
+	for stepIndex, s := range job.Steps {
 		if s.Component.IsInteractive {
 			foundInteractive = true
 
 			if s.Component.Container.InteractiveApps.ProxyImage == "" {
-				s.Component.Container.InteractiveApps.ProxyImage = "discoenv/cas-proxy"
+				job.Steps[stepIndex].Component.Container.InteractiveApps.ProxyImage = "discoenv/cas-proxy"
 			}
 
 			if s.Component.Container.InteractiveApps.ProxyName == "" {
-				s.Component.Container.InteractiveApps.ProxyName = fmt.Sprintf("cas-proxy-%s", job.InvocationID)
+				job.Steps[stepIndex].Component.Container.InteractiveApps.ProxyName = fmt.Sprintf("cas-proxy-%s", job.InvocationID)
 			}
 		}
 	}

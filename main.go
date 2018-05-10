@@ -181,6 +181,10 @@ func main() {
 	cfg.Set("proxy.lower", *proxyLower)
 	cfg.Set("proxy.upper", *proxyUpper)
 
+	if cfg.GetString("k8s.frontend.base") == "" {
+		log.Fatal("k8s.frontend.base must be set in the configuration file")
+	}
+
 	if cfg.GetString("k8s.app-exposer.base") == "" && *exposerURL == "" {
 		log.Fatal("the exposer url must be set either in the config file or with --exposer-url")
 	}

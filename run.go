@@ -374,11 +374,36 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 
 		log.Printf("proxy will listen on port %d", availablePort)
 
+		var frontendURL string
+		var fURL *url.URL
+
+		if step.Component.Container.InteractiveApps.FrontendURL != "" {
+			fURL, err = url.Parse(step.Component.Container.InteractiveApps.FrontendURL)
+		} else {
+			fURL, err = url.Parse(r.cfg.GetString("k8s.frontend.base"))
+		}
+
+		if err != nil {
+			running(r.client, r.job, fmt.Sprintf("error parsing frontend URL: %s", err.Error()))
+			return messaging.StatusStepFailed, err
+		}
+
+		fURLPort := fURL.Port()
+		fURLHost := fmt.Sprintf("%s.%s", r.job.InvocationID, fURL.Hostname())
+
+		if fURLPort != "" {
+			fURL.Host = fmt.Sprintf("%s:%s", fURLHost, fURLPort)
+		} else {
+			fURL.Host = fURLHost
+		}
+
+		frontendURL = fURL.String()
+
 		proxyCfg := &proxyContainerConfig{
 			backendURL:    backendURL,
 			casURL:        step.Component.Container.InteractiveApps.CASURL,
 			casValidate:   step.Component.Container.InteractiveApps.CASValidate,
-			frontendURL:   step.Component.Container.InteractiveApps.FrontendURL,
+			frontendURL:   frontendURL,
 			containerName: containerName,
 			containerImg:  step.Component.Container.InteractiveApps.ProxyImage,
 			dockerPath:    r.cfg.GetString("docker.path"),

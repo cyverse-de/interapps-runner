@@ -388,8 +388,9 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			return messaging.StatusStepFailed, err
 		}
 
+		ingressID := fmt.Sprintf("app-%s", r.job.InvocationID)
 		fURLPort := fURL.Port()
-		fURLHost := fmt.Sprintf("%s.%s", r.job.InvocationID, fURL.Hostname())
+		fURLHost := fmt.Sprintf("%s.%s", ingressID, fURL.Hostname())
 
 		if fURLPort != "" {
 			fURL.Host = fmt.Sprintf("%s:%s", fURLHost, fURLPort)
@@ -416,7 +417,7 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 
 		exposerURL := r.cfg.GetString("k8s.app-exposer.base")
 		exposerHost := r.cfg.GetString("k8s.app-exposer.host-header")
-		ingressID := fmt.Sprintf("app-%s", r.job.InvocationID)
+
 		hostIP := GetOutboundIP()
 		eptcfg := &EndpointConfig{
 			IP:   hostIP.String(),

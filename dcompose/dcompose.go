@@ -2,6 +2,7 @@ package dcompose
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -51,6 +52,43 @@ var (
 	logdriver      string
 	hostworkingdir string
 )
+
+// IngressID returns the name/identifier for the ingress in k8s.
+func IngressID(invocationID string) string {
+	return fmt.Sprintf("app-%s", invocationID)
+}
+
+// FrontendURL generates the full URL to to the running app, as shown to the
+// user and accessed through a browser.
+func FrontendURL(invocationID, ingressID string, step *model.Step, cfg *viper.Viper) (string, error) {
+	var (
+		unmodifiedURL string
+		fURL          *url.URL
+		err           error
+	)
+
+	if step.Component.Container.InteractiveApps.FrontendURL != "" {
+		unmodifiedURL = step.Component.Container.InteractiveApps.FrontendURL
+	} else {
+		unmodifiedURL = cfg.GetString("k8s.frontend.base")
+	}
+
+	fURL, err = url.Parse(unmodifiedURL)
+	if err != nil {
+		return "", errors.Wrapf(err, "error parsing URL %s", unmodifiedURL)
+	}
+
+	fURLPort := fURL.Port()
+	fURLHost := fmt.Sprintf("%s.%s", ingressID, fURL.Hostname())
+
+	if fURLPort != "" {
+		fURL.Host = fmt.Sprintf("%s:%s", fURLHost, fURLPort)
+	} else {
+		fURL.Host = fURLHost
+	}
+
+	return fURL.String(), nil
+}
 
 // Volume is a Docker volume definition in the Docker compose file.
 type Volume struct {
@@ -141,7 +179,9 @@ func New(ld string, pathprefix string) (*JobCompose, error) {
 
 // InitFromJob fills out values as appropriate for running in the DE's Condor
 // Cluster.
-func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir string) {
+func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir string) error {
+	var err error
+
 	workingVolumeHostPath := path.Join(workingdir, VOLUMEDIR)
 	// The volume containing the local working directory
 
@@ -197,7 +237,9 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 
 	// Add the steps to the docker-compose file.
 	for index, step := range job.Steps {
-		j.ConvertStep(&step, index, job.Submitter, job.InvocationID, workingVolumeHostPath)
+		if err = j.ConvertStep(&step, cfg, index, job.Submitter, job.InvocationID, workingVolumeHostPath); err != nil {
+			return err
+		}
 	}
 
 	// Add the final output job
@@ -223,10 +265,11 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 			TypeLabel:            strconv.Itoa(OutputContainer),
 		},
 	}
+	return nil
 }
 
 // ConvertStep will add the job step to the JobCompose services
-func (j *JobCompose) ConvertStep(step *model.Step, index int, user, invID, workingDirHostPath string) {
+func (j *JobCompose) ConvertStep(step *model.Step, cfg *viper.Viper, index int, user, invID, workingDirHostPath string) error {
 	// Construct the name of the image
 	// Set the name of the image for the container.
 	var imageName string
@@ -240,8 +283,14 @@ func (j *JobCompose) ConvertStep(step *model.Step, index int, user, invID, worki
 		imageName = step.Component.Container.Image.Name
 	}
 
+	redirectURL, err := FrontendURL(invID, IngressID(invID), step, cfg)
+	if err != nil {
+		return err
+	}
+
 	step.Environment["IPLANT_USER"] = user
 	step.Environment["IPLANT_EXECUTION_ID"] = invID
+	step.Environment["REDIRECT_URL"] = redirectURL
 
 	var containername string
 	if step.Component.Container.Name != "" {
@@ -337,4 +386,5 @@ func (j *JobCompose) ConvertStep(step *model.Step, index int, user, invID, worki
 			),
 		)
 	}
+	return nil
 }

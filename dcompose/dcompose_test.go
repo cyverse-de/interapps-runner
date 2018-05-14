@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/spf13/viper"
 	"gopkg.in/cyverse-de/model.v2"
 
 	yaml "gopkg.in/yaml.v2"
@@ -347,7 +348,10 @@ func TestConvertStep(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	jc.ConvertStep(&testJob.Steps[0], 0, testJob.Submitter, testJob.InvocationID, "")
+	cfg := viper.New()
+	cfg.Set("k8s.frontend.base", "http://cyverse.run/")
+
+	jc.ConvertStep(&testJob.Steps[0], cfg, 0, testJob.Submitter, testJob.InvocationID, "")
 	if len(jc.Services) != 1 {
 		t.Errorf("number of services was %d and not 1", len(jc.Services))
 	}

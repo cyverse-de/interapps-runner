@@ -374,31 +374,13 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 
 		log.Printf("proxy will listen on port %d", availablePort)
 
-		var frontendURL string
-		var fURL *url.URL
+		ingressID := dcompose.IngressID(r.job.InvocationID)
 
-		if step.Component.Container.InteractiveApps.FrontendURL != "" {
-			fURL, err = url.Parse(step.Component.Container.InteractiveApps.FrontendURL)
-		} else {
-			fURL, err = url.Parse(r.cfg.GetString("k8s.frontend.base"))
-		}
-
+		frontendURL, err := dcompose.FrontendURL(r.job.InvocationID, ingressID, &step, r.cfg)
 		if err != nil {
 			running(r.client, r.job, fmt.Sprintf("error parsing frontend URL: %s", err.Error()))
 			return messaging.StatusStepFailed, err
 		}
-
-		ingressID := fmt.Sprintf("app-%s", r.job.InvocationID)
-		fURLPort := fURL.Port()
-		fURLHost := fmt.Sprintf("%s.%s", ingressID, fURL.Hostname())
-
-		if fURLPort != "" {
-			fURL.Host = fmt.Sprintf("%s:%s", fURLHost, fURLPort)
-		} else {
-			fURL.Host = fURLHost
-		}
-
-		frontendURL = fURL.String()
 
 		proxyCfg := &proxyContainerConfig{
 			backendURL:    backendURL,

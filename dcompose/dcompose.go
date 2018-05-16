@@ -268,7 +268,8 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 	return nil
 }
 
-// ConvertStep will add the job step to the JobCompose services
+// ConvertStep will add the job step to the JobCompose services along with a
+// proxy service.
 func (j *JobCompose) ConvertStep(step *model.Step, cfg *viper.Viper, index int, user, invID, workingDirHostPath string) error {
 	// Construct the name of the image
 	// Set the name of the image for the container.
@@ -298,6 +299,7 @@ func (j *JobCompose) ConvertStep(step *model.Step, cfg *viper.Viper, index int, 
 	} else {
 		containername = fmt.Sprintf("step_%d_%s", index, invID)
 	}
+
 	indexstr := strconv.Itoa(index)
 	j.Services[fmt.Sprintf("step_%d", index)] = &Service{
 		Image:      imageName,

@@ -406,6 +406,7 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 		}
 
 		go r.runProxyContainer(stepctx, proxyCfg)
+		defer r.killProxyContainer(stepctx, dockerPath, containerName)
 
 		exposerURL := r.cfg.GetString("k8s.app-exposer.base")
 		exposerHost := r.cfg.GetString("k8s.app-exposer.host-header")
@@ -465,6 +466,7 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 		)
 
 		// Kill the proxy container
+		r.killProxyContainer(stepctx, dockerPath, containerName)
 		stepcancel()
 	}
 	return messaging.Success, err
@@ -523,6 +525,10 @@ func (r *JobRunner) pullProxyImage(ctx context.Context, dockerPath, proxyImg str
 
 func (r *JobRunner) createProxyContainer(ctx context.Context, dockerPath, proxyImg, containerName, networkName string) error {
 	return r.execCmd(ctx, dockerPath, "create", "--name", containerName, "--network", networkName, proxyImg)
+}
+
+func (r *JobRunner) killProxyContainer(ctx context.Context, dockerPath, containerName string) error {
+	return r.execCmd(ctx, dockerPath, "kill", containerName)
 }
 
 type proxyContainerConfig struct {

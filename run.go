@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -309,10 +310,18 @@ func (r *JobRunner) websocketURL(step *model.Step, backendURL string) (string, e
 	return websocketURL, nil
 }
 
-func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
+func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, error) {
 	var err error
 
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel() // Probably overkill, but this should nuke the proxy as well.
+
 	for idx, step := range r.job.Steps {
+		// We need to clean up the proxy container for each step as well as respond
+		// to signals, so derive a new context from the one passed in.
+		stepctx, stepcancel := context.WithCancel(ctx)
+		defer stepcancel()
+
 		running(r.client, r.job,
 			fmt.Sprintf(
 				"Running tool container %s:%s with arguments: %s",
@@ -335,7 +344,7 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 		defer stderr.Close()
 
 		dockerPath := r.cfg.GetString("docker.path")
-		if err = r.pullProxyImage(dockerPath, step.Component.Container.InteractiveApps.ProxyImage); err != nil {
+		if err = r.pullProxyImage(stepctx, dockerPath, step.Component.Container.InteractiveApps.ProxyImage); err != nil {
 			log.Error(err)
 			return messaging.StatusDockerPullFailed, err
 		}
@@ -395,7 +404,8 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 			websocketURL:  websocketURL,
 			hostPort:      strconv.Itoa(availablePort),
 		}
-		go r.runProxyContainer(proxyCfg)
+
+		go r.runProxyContainer(stepctx, proxyCfg)
 
 		exposerURL := r.cfg.GetString("k8s.app-exposer.base")
 		exposerHost := r.cfg.GetString("k8s.app-exposer.host-header")
@@ -453,8 +463,9 @@ func (r *JobRunner) runAllSteps() (messaging.StatusCode, error) {
 				strings.Join(step.Arguments(), " "),
 			),
 		)
-		// stdout.Close()
-		// stderr.Close()
+
+		// Kill the proxy container
+		stepcancel()
 	}
 	return messaging.Success, err
 }
@@ -497,8 +508,8 @@ func parseRepo(imagename string) string {
 	return ""
 }
 
-func (r *JobRunner) execCmd(args ...string) error {
-	cmd := exec.Command(args[0], args[1:]...)
+func (r *JobRunner) execCmd(ctx context.Context, args ...string) error {
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Env = os.Environ()
 	cmd.Dir = r.workingDir
 	cmd.Stdout = logWriter
@@ -506,12 +517,12 @@ func (r *JobRunner) execCmd(args ...string) error {
 	return cmd.Run()
 }
 
-func (r *JobRunner) pullProxyImage(dockerPath, proxyImg string) error {
-	return r.execCmd(dockerPath, "pull", proxyImg)
+func (r *JobRunner) pullProxyImage(ctx context.Context, dockerPath, proxyImg string) error {
+	return r.execCmd(ctx, dockerPath, "pull", proxyImg)
 }
 
-func (r *JobRunner) createProxyContainer(dockerPath, proxyImg, containerName, networkName string) error {
-	return r.execCmd(dockerPath, "create", "--name", containerName, "--network", networkName, proxyImg)
+func (r *JobRunner) createProxyContainer(ctx context.Context, dockerPath, proxyImg, containerName, networkName string) error {
+	return r.execCmd(ctx, dockerPath, "create", "--name", containerName, "--network", networkName, proxyImg)
 }
 
 type proxyContainerConfig struct {
@@ -528,7 +539,7 @@ type proxyContainerConfig struct {
 	hostPort      string
 }
 
-func (r *JobRunner) runProxyContainer(cfg *proxyContainerConfig) error {
+func (r *JobRunner) runProxyContainer(ctx context.Context, cfg *proxyContainerConfig) error {
 	cmdElements := []string{
 		cfg.dockerPath,
 		"run",
@@ -557,20 +568,20 @@ func (r *JobRunner) runProxyContainer(cfg *proxyContainerConfig) error {
 		lastElements = append(lastElements, "--ssl-key", cfg.sslKeyPath)
 	}
 
-	return r.execCmd(append(cmdElements, lastElements...)...)
+	return r.execCmd(ctx, append(cmdElements, lastElements...)...)
 }
 
-func (r *JobRunner) createNetwork(dockerPath, networkName string) error {
-	return r.execCmd(dockerPath, "network", "create", "--driver", "bridge", networkName)
+func (r *JobRunner) createNetwork(ctx context.Context, dockerPath, networkName string) error {
+	return r.execCmd(ctx, dockerPath, "network", "create", "--driver", "bridge", networkName)
 }
 
-func (r *JobRunner) dockerComposePull(composePath string) error {
-	return r.execCmd(composePath, "-p", r.projectName, "-f", "docker-compose.yml", "pull", "--parallel")
+func (r *JobRunner) dockerComposePull(ctx context.Context, composePath string) error {
+	return r.execCmd(ctx, composePath, "-p", r.projectName, "-f", "docker-compose.yml", "pull", "--parallel")
 
 }
 
 // Run executes the job, and returns the exit code on the exit channel.
-func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan messaging.StatusCode) {
+func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan messaging.StatusCode) {
 	host, err := os.Hostname()
 	if err != nil {
 		log.Error(err)
@@ -599,11 +610,11 @@ func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan 
 		log.Error(err)
 	}
 
-	if err = runner.createNetwork(dockerPath, runner.networkName); err != nil {
+	if err = runner.createNetwork(ctx, dockerPath, runner.networkName); err != nil {
 		log.Error(err) // don't need to fail, since docker-compose is *supposed* to create the network
 	}
 
-	if err = runner.dockerComposePull(composePath); err != nil {
+	if err = runner.dockerComposePull(ctx, composePath); err != nil {
 		log.Error(err)
 		runner.status = messaging.StatusDockerPullFailed
 	}
@@ -634,7 +645,7 @@ func Run(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan 
 	// Only attempt to run the steps if the input downloads succeeded. No reason
 	// to run the steps if there's no/corrupted data to operate on.
 	if runner.status == messaging.Success {
-		if runner.status, err = runner.runAllSteps(); err != nil {
+		if runner.status, err = runner.runAllSteps(ctx); err != nil {
 			log.Error(err)
 		}
 	}

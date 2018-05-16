@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -118,12 +119,16 @@ func main() {
 		err         error
 		cfg         *viper.Viper
 	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	sigquitter := make(chan bool)
 	sighandler := InitSignalHandler()
 	sighandler.Receive(
 		sigquitter,
 		func(sig os.Signal) {
+			cancel() //Kill all subprocesses immediately.
+
 			log.Info("Received signal:", sig)
 			if job == nil {
 				log.Warn("Info didn't get parsed from the job file, can't clean up. Probably don't need to.")
@@ -134,6 +139,10 @@ func main() {
 			if client != nil && job != nil {
 				fail(client, job, fmt.Sprintf("Received signal %s", sig))
 			}
+
+			// I would think that this would trigger the deferred cancel(), but it's
+			// called explicitly above. Multiple calls to cancel() shouldn't hurt
+			// anything.
 			os.Exit(-1)
 		},
 		func() {
@@ -314,7 +323,7 @@ func main() {
 	)
 
 	// Actually execute all of the job steps.
-	go Run(client, job, cfg, exit)
+	go Run(ctx, client, job, cfg, exit)
 
 	// Block waiting for the exit code, which will either come from the Run()
 	// goroutine or from Condor passing along a signal.
@@ -325,6 +334,8 @@ func main() {
 	if err = fs.DeleteJobFile(fs.FS, job.InvocationID, *writeTo); err != nil {
 		log.Errorf("%+v", err)
 	}
+
+	cancel() //again, just in case.
 
 	// Exit with the status code of the job.
 	os.Exit(int(exitCode))

@@ -150,10 +150,11 @@ type Service struct {
 // JobCompose is the top-level type for what will become a job's docker-compose
 // file.
 type JobCompose struct {
-	Version  string `yaml:"version"`
-	Volumes  map[string]*Volume
-	Networks map[string]*Network `yaml:",omitempty"`
-	Services map[string]*Service
+	Version       string `yaml:"version"`
+	Volumes       map[string]*Volume
+	Networks      map[string]*Network `yaml:",omitempty"`
+	Services      map[string]*Service
+	AvailablePort int
 }
 
 // New returns a newly instantiated *JobCompose instance.
@@ -266,6 +267,46 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 		},
 	}
 	return nil
+}
+
+func websocketURL(step *model.Step, backendURL string) (string, error) {
+	var websocketURL string
+	if step.Component.Container.InteractiveApps.WebsocketPath != "" ||
+		step.Component.Container.InteractiveApps.WebsocketProto != "" ||
+		step.Component.Container.InteractiveApps.WebsocketPort != "" {
+
+		burl, err := url.Parse(backendURL)
+		if err != nil {
+			return "", errors.Wrapf(err, "couldn't parse URL %s", backendURL)
+		}
+
+		var wsPath, wsProto, wsPort string
+		if step.Component.Container.InteractiveApps.WebsocketPath != "" {
+			wsPath = step.Component.Container.InteractiveApps.WebsocketPath
+		} else {
+			wsPath = burl.Path
+		}
+
+		if step.Component.Container.InteractiveApps.WebsocketProto != "" {
+			wsProto = step.Component.Container.InteractiveApps.WebsocketProto
+		} else {
+			wsProto = burl.Scheme
+		}
+
+		if step.Component.Container.InteractiveApps.WebsocketPort != "" {
+			wsPort = step.Component.Container.InteractiveApps.WebsocketPort
+		} else {
+			wsPort = burl.Port()
+		}
+
+		burl.Path = wsPath
+		burl.Scheme = wsProto
+		if wsPort != "" {
+			burl.Host = fmt.Sprintf("%s:%s", burl.Hostname(), wsPort)
+		}
+		websocketURL = burl.String()
+	}
+	return websocketURL, nil
 }
 
 // ConvertStep will add the job step to the JobCompose services along with a
@@ -390,5 +431,84 @@ func (j *JobCompose) ConvertStep(step *model.Step, cfg *viper.Viper, index int, 
 			),
 		)
 	}
+
+	/////////// Proxy
+
+	//Only supporting a single port for now.
+	var containerPort int
+	if step.Component.Container.Ports[0].ContainerPort != 0 {
+		containerPort = step.Component.Container.Ports[0].ContainerPort
+	}
+
+	var backendURL string
+	if step.Component.Container.InteractiveApps.BackendURL != "" {
+		backendURL = step.Component.Container.InteractiveApps.BackendURL
+	} else {
+		if containerPort != 0 {
+			backendURL = fmt.Sprintf("http://step_%d_%s:%d", index, invID, containerPort)
+		} else {
+			backendURL = fmt.Sprintf("http://step_%d_%s", index, invID)
+		}
+	}
+
+	websocketURL, err := websocketURL(step, backendURL)
+	if err != nil {
+		return err
+	}
+
+	ingressID := IngressID(invID)
+
+	frontendURL, err := FrontendURL(invID, ingressID, step, cfg)
+	if err != nil {
+		return err
+	}
+
+	lowerPort := cfg.GetInt("proxy.lower")
+	upperPort := cfg.GetInt("proxy.upper")
+	availablePort, err := AvailableTCPPort(lowerPort, upperPort)
+	if err != nil {
+		return err
+	}
+	j.AvailablePort = availablePort
+
+	// Add a service for the proxy container. Each step has a corresponding proxy.
+	proxyName := ProxyName(index, invID)
+	j.Services[ProxyServiceName(index)] = &Service{
+		Image: stepContainer.InteractiveApps.ProxyImage,
+		Command: []string{
+			"--backend-url", backendURL,
+			"--ws-backend-url", websocketURL,
+			"--frontend-url", frontendURL,
+			"--cas-base-url", stepContainer.InteractiveApps.CASURL,
+			"--cas-validate", stepContainer.InteractiveApps.CASValidate,
+		},
+		Labels: map[string]string{
+			model.DockerLabelKey: strconv.Itoa(StepContainer),
+		},
+		Logging: &LoggingConfig{
+			Driver: logdriver,
+			Options: map[string]string{
+				"stderr": path.Join(hostworkingdir, VOLUMEDIR, step.Stderr(indexstr)),
+				"stdout": path.Join(hostworkingdir, VOLUMEDIR, step.Stdout(indexstr)),
+			},
+		},
+		ContainerName: proxyName,
+		Environment:   step.Environment,
+		Ports: []string{
+			fmt.Sprintf("%s:8080", strconv.Itoa(availablePort)),
+		},
+	}
 	return nil
+}
+
+// ProxyName returns the name of the cas-proxy container based on the step index and the
+// job's invocationID.
+func ProxyName(index int, invocationID string) string {
+	return fmt.Sprintf("step_proxy_%d_%s", index, invocationID)
+}
+
+// ProxyServiceName returns the docker-compose service name for the cas-proxy,
+// based on the step index passed in.
+func ProxyServiceName(index int) string {
+	return fmt.Sprintf("proxy_%d", index)
 }

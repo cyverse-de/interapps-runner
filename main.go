@@ -323,7 +323,7 @@ func main() {
 	)
 
 	// Actually execute all of the job steps.
-	go Run(ctx, client, job, cfg, exit)
+	go Run(ctx, client, job, cfg, exit, composer.AvailablePort)
 
 	// Block waiting for the exit code, which will either come from the Run()
 	// goroutine or from Condor passing along a signal.

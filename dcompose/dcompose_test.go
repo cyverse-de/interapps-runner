@@ -72,6 +72,11 @@ var testJob = &model.Job{
 						Name: "container-image-name-1",
 						Tag:  "container-image-tag-1",
 					},
+					Ports: []model.Ports{
+						{
+							ContainerPort: 80,
+						},
+					},
 					VolumesFrom: []model.VolumesFrom{
 						{
 							Tag:           "tag1",
@@ -352,7 +357,7 @@ func TestConvertStep(t *testing.T) {
 	cfg.Set("k8s.frontend.base", "http://cyverse.run/")
 
 	jc.ConvertStep(&testJob.Steps[0], cfg, 0, testJob.Submitter, testJob.InvocationID, "")
-	if len(jc.Services) != 1 {
+	if len(jc.Services) != 2 {
 		t.Errorf("number of services was %d and not 1", len(jc.Services))
 	}
 	if _, ok := jc.Services["step_0"]; !ok {

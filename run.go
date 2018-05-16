@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/cyverse-de/interapps-runner/dcompose"
@@ -42,35 +41,37 @@ var logWriter = &logrusProxyWriter{
 
 // JobRunner provides the functionality needed to run jobs.
 type JobRunner struct {
-	client      JobUpdatePublisher
-	exit        chan messaging.StatusCode
-	job         *model.Job
-	status      messaging.StatusCode
-	cfg         *viper.Viper
-	logsDir     string
-	volumeDir   string
-	workingDir  string
-	projectName string
-	tmpDir      string
-	networkName string
+	client        JobUpdatePublisher
+	exit          chan messaging.StatusCode
+	job           *model.Job
+	status        messaging.StatusCode
+	cfg           *viper.Viper
+	logsDir       string
+	volumeDir     string
+	workingDir    string
+	projectName   string
+	tmpDir        string
+	networkName   string
+	availablePort int
 }
 
 // NewJobRunner creates a new JobRunner
-func NewJobRunner(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan messaging.StatusCode) (*JobRunner, error) {
+func NewJobRunner(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan messaging.StatusCode, availablePort int) (*JobRunner, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
 	runner := &JobRunner{
-		client:     client,
-		exit:       exit,
-		job:        job,
-		cfg:        cfg,
-		status:     messaging.Success,
-		workingDir: cwd,
-		volumeDir:  path.Join(cwd, dcompose.VOLUMEDIR),
-		logsDir:    path.Join(cwd, dcompose.VOLUMEDIR, "logs"),
-		tmpDir:     path.Join(cwd, dcompose.TMPDIR),
+		client:        client,
+		exit:          exit,
+		job:           job,
+		cfg:           cfg,
+		status:        messaging.Success,
+		workingDir:    cwd,
+		volumeDir:     path.Join(cwd, dcompose.VOLUMEDIR),
+		logsDir:       path.Join(cwd, dcompose.VOLUMEDIR, "logs"),
+		tmpDir:        path.Join(cwd, dcompose.TMPDIR),
+		availablePort: availablePort,
 	}
 	return runner, nil
 }
@@ -171,10 +172,11 @@ type JobUpdatePublisher interface {
 	PublishJobUpdate(m *messaging.UpdateMessage) error
 }
 
-func (r *JobRunner) execDockerCompose(svcname string, env []string, stdout, stderr io.Writer) error {
+func (r *JobRunner) execDockerCompose(ctx context.Context, svcname string, env []string, stdout, stderr io.Writer) error {
 	var err error
 	composePath := r.cfg.GetString("docker-compose.path")
-	cmd := exec.Command(
+	cmd := exec.CommandContext(
+		ctx,
 		composePath,
 		"-p",
 		r.projectName,
@@ -195,7 +197,7 @@ func (r *JobRunner) execDockerCompose(svcname string, env []string, stdout, stde
 	return nil
 }
 
-func (r *JobRunner) createDataContainers() (messaging.StatusCode, error) {
+func (r *JobRunner) createDataContainers(ctx context.Context) (messaging.StatusCode, error) {
 	var err error
 
 	for index := range r.job.DataContainers() {
@@ -203,7 +205,7 @@ func (r *JobRunner) createDataContainers() (messaging.StatusCode, error) {
 
 		running(r.client, r.job, fmt.Sprintf("creating data container data_%d", index))
 
-		if err = r.execDockerCompose(svcname, os.Environ(), logWriter, logWriter); err != nil {
+		if err = r.execDockerCompose(ctx, svcname, os.Environ(), logWriter, logWriter); err != nil {
 			running(
 				r.client,
 				r.job,
@@ -218,7 +220,7 @@ func (r *JobRunner) createDataContainers() (messaging.StatusCode, error) {
 	return messaging.Success, nil
 }
 
-func (r *JobRunner) downloadInputs() (messaging.StatusCode, error) {
+func (r *JobRunner) downloadInputs(ctx context.Context) (messaging.StatusCode, error) {
 	var exitCode int64
 
 	env := os.Environ()
@@ -241,7 +243,7 @@ func (r *JobRunner) downloadInputs() (messaging.StatusCode, error) {
 		defer stdout.Close()
 
 		svcname := fmt.Sprintf("input_%d", index)
-		if err = r.execDockerCompose(svcname, env, stdout, stderr); err != nil {
+		if err = r.execDockerCompose(ctx, svcname, env, stdout, stderr); err != nil {
 			running(r.client, r.job, fmt.Sprintf("error downloading %s: %s", input.IRODSPath(), err.Error()))
 			return messaging.StatusInputFailed, errors.Wrapf(err, "failed to download %s with an exit code of %d", input.IRODSPath(), exitCode)
 		}
@@ -312,16 +314,10 @@ func (r *JobRunner) websocketURL(step *model.Step, backendURL string) (string, e
 
 func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, error) {
 	var err error
-
 	ctx, cancel := context.WithCancel(parent)
-	defer cancel() // Probably overkill, but this should nuke the proxy as well.
+	defer cancel()
 
 	for idx, step := range r.job.Steps {
-		// We need to clean up the proxy container for each step as well as respond
-		// to signals, so derive a new context from the one passed in.
-		stepctx, stepcancel := context.WithCancel(ctx)
-		defer stepcancel()
-
 		running(r.client, r.job,
 			fmt.Sprintf(
 				"Running tool container %s:%s with arguments: %s",
@@ -343,79 +339,33 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 		}
 		defer stderr.Close()
 
-		dockerPath := r.cfg.GetString("docker.path")
-		if err = r.pullProxyImage(stepctx, dockerPath, step.Component.Container.InteractiveApps.ProxyImage); err != nil {
+		proxystdout, err := os.Create(path.Join(r.logsDir, fmt.Sprintf("docker-compose-step-proxy-stdout-%d", idx)))
+		if err != nil {
 			log.Error(err)
-			return messaging.StatusDockerPullFailed, err
 		}
+		defer proxystdout.Close()
 
-		//Only supporting a single port for now.
-		var containerPort int
-		if step.Component.Container.Ports[0].ContainerPort != 0 {
-			containerPort = step.Component.Container.Ports[0].ContainerPort
+		proxystderr, err := os.Create(path.Join(r.logsDir, fmt.Sprintf("docker-compose-step-proxy-stderr-%d", idx)))
+		if err != nil {
+			log.Error(err)
 		}
+		defer proxystderr.Close()
 
-		containerName := fmt.Sprintf("step_%d_%s_proxy", idx, job.InvocationID)
-
-		var backendURL string
-		if step.Component.Container.InteractiveApps.BackendURL != "" {
-			backendURL = step.Component.Container.InteractiveApps.BackendURL
-		} else {
-			if containerPort != 0 {
-				backendURL = fmt.Sprintf("http://step_%d_%s:%d", idx, job.InvocationID, containerPort)
-			} else {
-				backendURL = fmt.Sprintf("http://step_%d_%s", idx, job.InvocationID)
+		go func() {
+			if err = r.execDockerCompose(ctx, dcompose.ProxyServiceName(idx), os.Environ(), proxystdout, proxystderr); err != nil {
+				running(r.client, r.job, fmt.Sprintf("error running proxy %s", err.Error()))
 			}
-		}
-
-		websocketURL, err := r.websocketURL(&step, backendURL)
-		if err != nil {
-			return messaging.StatusStepFailed, err
-		}
-
-		lowerPort := r.cfg.GetInt("proxy.lower")
-		upperPort := r.cfg.GetInt("proxy.upper")
-		availablePort, err := AvailableTCPPort(lowerPort, upperPort)
-		if err != nil {
-			running(r.client, r.job, fmt.Sprintf("Error getting available port: %s", err.Error()))
-			return messaging.StatusStepFailed, err
-		}
-
-		log.Printf("proxy will listen on port %d", availablePort)
-
-		ingressID := dcompose.IngressID(r.job.InvocationID)
-
-		frontendURL, err := dcompose.FrontendURL(r.job.InvocationID, ingressID, &step, r.cfg)
-		if err != nil {
-			running(r.client, r.job, fmt.Sprintf("error parsing frontend URL: %s", err.Error()))
-			return messaging.StatusStepFailed, err
-		}
-
-		proxyCfg := &proxyContainerConfig{
-			backendURL:    backendURL,
-			casURL:        step.Component.Container.InteractiveApps.CASURL,
-			casValidate:   step.Component.Container.InteractiveApps.CASValidate,
-			frontendURL:   frontendURL,
-			containerName: containerName,
-			containerImg:  step.Component.Container.InteractiveApps.ProxyImage,
-			dockerPath:    r.cfg.GetString("docker.path"),
-			sslKeyPath:    step.Component.Container.InteractiveApps.SSLKeyPath,
-			sslCertPath:   step.Component.Container.InteractiveApps.SSLCertPath,
-			websocketURL:  websocketURL,
-			hostPort:      strconv.Itoa(availablePort),
-		}
-
-		go r.runProxyContainer(stepctx, proxyCfg)
-		defer r.killProxyContainer(stepctx, dockerPath, containerName)
+		}()
 
 		exposerURL := r.cfg.GetString("k8s.app-exposer.base")
 		exposerHost := r.cfg.GetString("k8s.app-exposer.host-header")
+		ingressID := dcompose.IngressID(r.job.InvocationID)
 
 		hostIP := GetOutboundIP()
 		eptcfg := &EndpointConfig{
 			IP:   hostIP.String(),
 			Name: ingressID,
-			Port: availablePort,
+			Port: r.availablePort,
 		}
 		if err = CreateK8SEndpoint(exposerURL, exposerHost, eptcfg); err != nil {
 			running(r.client, r.job, fmt.Sprintf("Error creating K8s Endpoint: %s", err.Error()))
@@ -423,7 +373,7 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 		}
 
 		svccfg := &ServiceConfig{
-			TargetPort: availablePort,
+			TargetPort: r.availablePort,
 			Name:       ingressID,
 			ListenPort: 80,
 		}
@@ -443,7 +393,7 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 		}
 
 		svcname := fmt.Sprintf("step_%d", idx)
-		if err = r.execDockerCompose(svcname, os.Environ(), stdout, stderr); err != nil {
+		if err = r.execDockerCompose(ctx, svcname, os.Environ(), stdout, stderr); err != nil {
 			running(r.client, r.job,
 				fmt.Sprintf(
 					"Error running tool container %s:%s with arguments '%s': %s",
@@ -464,15 +414,11 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 				strings.Join(step.Arguments(), " "),
 			),
 		)
-
-		// Kill the proxy container
-		r.killProxyContainer(stepctx, dockerPath, containerName)
-		stepcancel()
 	}
 	return messaging.Success, err
 }
 
-func (r *JobRunner) uploadOutputs() (messaging.StatusCode, error) {
+func (r *JobRunner) uploadOutputs(ctx context.Context) (messaging.StatusCode, error) {
 	var err error
 
 	stdout, err := os.Create(path.Join(r.logsDir, fmt.Sprintf("logs-stdout-output")))
@@ -492,7 +438,7 @@ func (r *JobRunner) uploadOutputs() (messaging.StatusCode, error) {
 		fmt.Sprintf("VAULT_TOKEN=%s", r.cfg.GetString("vault.token")),
 	}
 
-	if err = r.execDockerCompose("upload_outputs", env, stdout, stderr); err != nil {
+	if err = r.execDockerCompose(ctx, "upload_outputs", env, stdout, stderr); err != nil {
 		running(r.client, r.job, fmt.Sprintf("Error uploading outputs to %s: %s", r.job.OutputDirectory(), err.Error()))
 		return messaging.StatusOutputFailed, errors.Wrapf(err, "failed to upload outputs to %s", r.job.OutputDirectory())
 	}
@@ -587,14 +533,14 @@ func (r *JobRunner) dockerComposePull(ctx context.Context, composePath string) e
 }
 
 // Run executes the job, and returns the exit code on the exit channel.
-func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan messaging.StatusCode) {
+func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan messaging.StatusCode, availablePort int) {
 	host, err := os.Hostname()
 	if err != nil {
 		log.Error(err)
 		host = "UNKNOWN"
 	}
 
-	runner, err := NewJobRunner(client, job, cfg, exit)
+	runner, err := NewJobRunner(client, job, cfg, exit, availablePort)
 	if err != nil {
 		log.Error(err)
 	}
@@ -634,7 +580,7 @@ func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *vi
 	}
 
 	if runner.status == messaging.Success {
-		if runner.status, err = runner.createDataContainers(); err != nil {
+		if runner.status, err = runner.createDataContainers(ctx); err != nil {
 			log.Error(err)
 		}
 	}
@@ -643,7 +589,7 @@ func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *vi
 	// correct versions of the tools. Don't bother pulling in data in that case,
 	// things are already screwed up.
 	if runner.status == messaging.Success {
-		if runner.status, err = runner.downloadInputs(); err != nil {
+		if runner.status, err = runner.downloadInputs(ctx); err != nil {
 			log.Error(err)
 		}
 	}
@@ -659,7 +605,7 @@ func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *vi
 	// debug issues when the job fails.
 	var outputStatus messaging.StatusCode
 	running(runner.client, runner.job, fmt.Sprintf("Beginning to upload outputs to %s", runner.job.OutputDirectory()))
-	if outputStatus, err = runner.uploadOutputs(); err != nil {
+	if outputStatus, err = runner.uploadOutputs(ctx); err != nil {
 		log.Error(err)
 	}
 	if outputStatus != messaging.Success {

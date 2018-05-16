@@ -356,7 +356,17 @@ func TestConvertStep(t *testing.T) {
 	cfg := viper.New()
 	cfg.Set("k8s.frontend.base", "http://cyverse.run/")
 
-	jc.ConvertStep(&testJob.Steps[0], cfg, 0, testJob.Submitter, testJob.InvocationID, "")
+	stepcfg := &ConvertStepParams{
+		Step:               &testJob.Steps[0],
+		Cfg:                cfg,
+		Index:              0,
+		User:               testJob.Submitter,
+		InvID:              testJob.InvocationID,
+		WorkingDirHostPath: "",
+		AvailablePort:      0,
+	}
+
+	jc.ConvertStep(stepcfg)
 	if len(jc.Services) != 2 {
 		t.Errorf("number of services was %d and not 1", len(jc.Services))
 	}

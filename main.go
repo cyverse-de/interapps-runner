@@ -265,6 +265,11 @@ func main() {
 	// status updates.
 	client.SetupPublishing(amqpExchangeName)
 
+	availablePort, err := dcompose.AvailableTCPPort(*proxyLower, *proxyUpper)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Generate the docker-compose file used to execute the job.
 	composer, err := dcompose.New(*logdriver, *pathprefix)
 	if err != nil {
@@ -276,7 +281,7 @@ func main() {
 
 	// Populates the data structure that will become the docker-compose file with
 	// information from the job definition.
-	composer.InitFromJob(job, cfg, wd)
+	composer.InitFromJob(job, cfg, wd, availablePort)
 
 	// Write out the docker-compose file. This will get transferred back with the
 	// job outputs, which makes debugging stuff a lot easier.
@@ -323,7 +328,7 @@ func main() {
 	)
 
 	// Actually execute all of the job steps.
-	go Run(ctx, client, job, cfg, exit, composer.AvailablePort)
+	go Run(ctx, client, job, cfg, exit, availablePort)
 
 	// Block waiting for the exit code, which will either come from the Run()
 	// goroutine or from Condor passing along a signal.

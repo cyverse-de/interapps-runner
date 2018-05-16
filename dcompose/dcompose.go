@@ -150,11 +150,10 @@ type Service struct {
 // JobCompose is the top-level type for what will become a job's docker-compose
 // file.
 type JobCompose struct {
-	Version       string `yaml:"version"`
-	Volumes       map[string]*Volume
-	Networks      map[string]*Network `yaml:",omitempty"`
-	Services      map[string]*Service
-	AvailablePort int
+	Version  string `yaml:"version"`
+	Volumes  map[string]*Volume
+	Networks map[string]*Network `yaml:",omitempty"`
+	Services map[string]*Service
 }
 
 // New returns a newly instantiated *JobCompose instance.
@@ -180,7 +179,7 @@ func New(ld string, pathprefix string) (*JobCompose, error) {
 
 // InitFromJob fills out values as appropriate for running in the DE's Condor
 // Cluster.
-func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir string) error {
+func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir string, availablePort int) error {
 	var err error
 
 	workingVolumeHostPath := path.Join(workingdir, VOLUMEDIR)
@@ -238,7 +237,16 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 
 	// Add the steps to the docker-compose file.
 	for index, step := range job.Steps {
-		if err = j.ConvertStep(&step, cfg, index, job.Submitter, job.InvocationID, workingVolumeHostPath); err != nil {
+		stepcfg := &ConvertStepParams{
+			Step:               &step,
+			Cfg:                cfg,
+			Index:              index,
+			User:               job.Submitter,
+			InvID:              job.InvocationID,
+			WorkingDirHostPath: workingVolumeHostPath,
+			AvailablePort:      availablePort,
+		}
+		if err = j.ConvertStep(stepcfg); err != nil {
 			return err
 		}
 	}
@@ -271,47 +279,68 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 
 func websocketURL(step *model.Step, backendURL string) (string, error) {
 	var websocketURL string
-	if step.Component.Container.InteractiveApps.WebsocketPath != "" ||
-		step.Component.Container.InteractiveApps.WebsocketProto != "" ||
-		step.Component.Container.InteractiveApps.WebsocketPort != "" {
+	// if step.Component.Container.InteractiveApps.WebsocketPath != "" ||
+	// 	step.Component.Container.InteractiveApps.WebsocketProto != "" ||
+	// 	step.Component.Container.InteractiveApps.WebsocketPort != "" {
 
-		burl, err := url.Parse(backendURL)
-		if err != nil {
-			return "", errors.Wrapf(err, "couldn't parse URL %s", backendURL)
-		}
-
-		var wsPath, wsProto, wsPort string
-		if step.Component.Container.InteractiveApps.WebsocketPath != "" {
-			wsPath = step.Component.Container.InteractiveApps.WebsocketPath
-		} else {
-			wsPath = burl.Path
-		}
-
-		if step.Component.Container.InteractiveApps.WebsocketProto != "" {
-			wsProto = step.Component.Container.InteractiveApps.WebsocketProto
-		} else {
-			wsProto = burl.Scheme
-		}
-
-		if step.Component.Container.InteractiveApps.WebsocketPort != "" {
-			wsPort = step.Component.Container.InteractiveApps.WebsocketPort
-		} else {
-			wsPort = burl.Port()
-		}
-
-		burl.Path = wsPath
-		burl.Scheme = wsProto
-		if wsPort != "" {
-			burl.Host = fmt.Sprintf("%s:%s", burl.Hostname(), wsPort)
-		}
-		websocketURL = burl.String()
+	burl, err := url.Parse(backendURL)
+	if err != nil {
+		return "", errors.Wrapf(err, "couldn't parse URL %s", backendURL)
 	}
+
+	var wsPath, wsProto, wsPort string
+	if step.Component.Container.InteractiveApps.WebsocketPath != "" {
+		wsPath = step.Component.Container.InteractiveApps.WebsocketPath
+	} else {
+		wsPath = burl.Path
+	}
+
+	if step.Component.Container.InteractiveApps.WebsocketProto != "" {
+		wsProto = step.Component.Container.InteractiveApps.WebsocketProto
+	} else {
+		wsProto = burl.Scheme
+	}
+
+	if step.Component.Container.InteractiveApps.WebsocketPort != "" {
+		wsPort = step.Component.Container.InteractiveApps.WebsocketPort
+	} else {
+		wsPort = burl.Port()
+	}
+
+	burl.Path = wsPath
+	burl.Scheme = wsProto
+	if wsPort != "" {
+		burl.Host = fmt.Sprintf("%s:%s", burl.Hostname(), wsPort)
+	}
+	websocketURL = burl.String()
+	// }
 	return websocketURL, nil
+}
+
+// ConvertStepParams contains the info needed to call ConvertStep()
+type ConvertStepParams struct {
+	Step               *model.Step
+	Cfg                *viper.Viper
+	Index              int
+	User               string
+	InvID              string
+	WorkingDirHostPath string
+	AvailablePort      int
 }
 
 // ConvertStep will add the job step to the JobCompose services along with a
 // proxy service.
-func (j *JobCompose) ConvertStep(step *model.Step, cfg *viper.Viper, index int, user, invID, workingDirHostPath string) error {
+func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
+	var (
+		step               = c.Step
+		cfg                = c.Cfg
+		index              = c.Index
+		user               = c.User
+		invID              = c.InvID
+		workingDirHostPath = c.WorkingDirHostPath
+		availablePort      = c.AvailablePort
+	)
+
 	// Construct the name of the image
 	// Set the name of the image for the container.
 	var imageName string
@@ -462,14 +491,6 @@ func (j *JobCompose) ConvertStep(step *model.Step, cfg *viper.Viper, index int, 
 	if err != nil {
 		return err
 	}
-
-	lowerPort := cfg.GetInt("proxy.lower")
-	upperPort := cfg.GetInt("proxy.upper")
-	availablePort, err := AvailableTCPPort(lowerPort, upperPort)
-	if err != nil {
-		return err
-	}
-	j.AvailablePort = availablePort
 
 	// Add a service for the proxy container. Each step has a corresponding proxy.
 	proxyName := ProxyName(index, invID)

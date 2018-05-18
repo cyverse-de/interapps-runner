@@ -56,7 +56,7 @@ var (
 
 // IngressID returns the name/identifier for the ingress in k8s.
 func IngressID(invocationID, userID string) string {
-	return fmt.Sprintf("a%x", sha256.Sum256([]byte(fmt.Sprintf("%s%s", userID, invocationID))))[0:8]
+	return fmt.Sprintf("a%x", sha256.Sum256([]byte(fmt.Sprintf("%s%s", userID, invocationID))))[0:9]
 }
 
 // FrontendURL generates the full URL to to the running app, as shown to the

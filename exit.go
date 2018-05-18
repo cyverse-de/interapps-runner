@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/cyverse-de/interapps-runner/dcompose"
 	"github.com/spf13/viper"
 	"gopkg.in/cyverse-de/messaging.v4"
 )
@@ -21,15 +22,17 @@ func cleanup(cfg *viper.Viper) {
 
 	baseURL := cfg.GetString("k8s.app-exposer.base")
 	header := cfg.GetString("k8s.app-exposer.host-header")
-	if err = DeleteK8SEndpoint(baseURL, header, fmt.Sprintf("app-%s", job.InvocationID)); err != nil {
+	ingressID := dcompose.IngressID(job.InvocationID, job.UserID)
+
+	if err = DeleteK8SEndpoint(baseURL, header, ingressID); err != nil {
 		log.Errorf("%+v\n", err)
 	}
 
-	if err = DeleteK8SService(baseURL, header, fmt.Sprintf("app-%s", job.InvocationID)); err != nil {
+	if err = DeleteK8SService(baseURL, header, ingressID); err != nil {
 		log.Errorf("%+v\n", err)
 	}
 
-	if err = DeleteK8SIngress(baseURL, header, fmt.Sprintf("app-%s", job.InvocationID)); err != nil {
+	if err = DeleteK8SIngress(baseURL, header, ingressID); err != nil {
 		log.Errorf("%+v\n", err)
 	}
 

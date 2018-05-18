@@ -359,7 +359,7 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 
 		exposerURL := r.cfg.GetString("k8s.app-exposer.base")
 		exposerHost := r.cfg.GetString("k8s.app-exposer.host-header")
-		ingressID := dcompose.IngressID(r.job.InvocationID)
+		ingressID := dcompose.IngressID(r.job.InvocationID, r.job.UserID)
 
 		hostIP := GetOutboundIP()
 		eptcfg := &EndpointConfig{

@@ -1,6 +1,7 @@
 package dcompose
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"net/url"
 	"os"
@@ -54,13 +55,13 @@ var (
 )
 
 // IngressID returns the name/identifier for the ingress in k8s.
-func IngressID(invocationID string) string {
-	return fmt.Sprintf("app-%s", invocationID)
+func IngressID(invocationID, userID string) string {
+	return fmt.Sprintf("a%x", sha256.Sum256([]byte(fmt.Sprintf("%s%s", userID, invocationID))))[0:8]
 }
 
 // FrontendURL generates the full URL to to the running app, as shown to the
 // user and accessed through a browser.
-func FrontendURL(invocationID, ingressID string, step *model.Step, cfg *viper.Viper) (string, error) {
+func FrontendURL(invID, ingressID string, step *model.Step, cfg *viper.Viper) (string, error) {
 	var (
 		unmodifiedURL string
 		fURL          *url.URL
@@ -242,6 +243,7 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 			Cfg:                cfg,
 			Index:              index,
 			User:               job.Submitter,
+			UserID:             job.UserID,
 			InvID:              job.InvocationID,
 			WorkingDirHostPath: workingVolumeHostPath,
 			AvailablePort:      availablePort,
@@ -323,6 +325,7 @@ type ConvertStepParams struct {
 	Cfg                *viper.Viper
 	Index              int
 	User               string
+	UserID             string
 	InvID              string
 	WorkingDirHostPath string
 	AvailablePort      int
@@ -336,6 +339,7 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 		cfg                = c.Cfg
 		index              = c.Index
 		user               = c.User
+		userID             = c.UserID
 		invID              = c.InvID
 		workingDirHostPath = c.WorkingDirHostPath
 		availablePort      = c.AvailablePort
@@ -354,7 +358,8 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 		imageName = step.Component.Container.Image.Name
 	}
 
-	redirectURL, err := FrontendURL(invID, IngressID(invID), step, cfg)
+	ingressID := IngressID(invID, userID)
+	redirectURL, err := FrontendURL(invID, ingressID, step, cfg)
 	if err != nil {
 		return err
 	}
@@ -484,8 +489,6 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 	if err != nil {
 		return err
 	}
-
-	ingressID := IngressID(invID)
 
 	frontendURL, err := FrontendURL(invID, ingressID, step, cfg)
 	if err != nil {

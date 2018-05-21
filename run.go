@@ -528,7 +528,7 @@ func (r *JobRunner) createNetwork(ctx context.Context, dockerPath, networkName s
 }
 
 func (r *JobRunner) dockerComposePull(ctx context.Context, composePath string) error {
-	return r.execCmd(ctx, composePath, "-p", r.projectName, "-f", "docker-compose.yml", "pull", "--parallel")
+	return r.execCmd(ctx, composePath, "-p", r.projectName, "-f", "docker-compose.yml", "pull")
 
 }
 

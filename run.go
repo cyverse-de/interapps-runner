@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -10,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/cyverse-de/interapps-runner/dcompose"
@@ -257,6 +260,19 @@ func (r *JobRunner) downloadInputs(ctx context.Context) (messaging.StatusCode, e
 	return messaging.Success, nil
 }
 
+// ImageUser returns the UID of the image's default user, or 0 if it's not set.
+func (r *JobRunner) ImageUser(ctx context.Context, image string) (int, error) {
+	out, err := exec.CommandContext(ctx, "docker", "image", "inspect", "-f", "{{.Config.User}}", image).Output()
+	if err != nil {
+		return -1, err
+	}
+	out = bytes.TrimSpace(out)
+	if len(out) > 0 {
+		return strconv.Atoi(string(out))
+	}
+	return 0, nil
+}
+
 type authInfo struct {
 	Username string
 	Password string
@@ -356,6 +372,20 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 				running(r.client, r.job, fmt.Sprintf("error running proxy %s", err.Error()))
 			}
 		}()
+
+		imgName := fmt.Sprintf("%s:%s", step.Component.Container.Image.Name, step.Component.Container.Image.Name)
+		userUID, err := r.ImageUser(ctx, imgName)
+		if err != nil {
+			return messaging.StatusStepFailed, err
+		}
+		if userUID != 0 {
+			if err = filepath.Walk(r.workingDir, func(path string, f os.FileInfo, err error) error {
+				log.Printf("chowning %s to %d:0\n", path, userUID)
+				return os.Chown(path, userUID, 0)
+			}); err != nil {
+				return messaging.StatusStepFailed, err
+			}
+		}
 
 		exposerURL := r.cfg.GetString("k8s.app-exposer.base")
 		exposerHost := r.cfg.GetString("k8s.app-exposer.host-header")

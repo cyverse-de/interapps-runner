@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/cyverse-de/interapps-runner/dcompose"
@@ -357,22 +356,6 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 				running(r.client, r.job, fmt.Sprintf("error running proxy %s", err.Error()))
 			}
 		}()
-
-		if err = filepath.Walk(r.workingDir, func(path string, f os.FileInfo, err error) error {
-			log.Printf("chmod %s 0777\n", path)
-			dockerPath := r.cfg.GetString("docker.path")
-			return exec.CommandContext(
-				ctx,
-				dockerPath,
-				"-v", fmt.Sprintf("%s:%s", r.workingDir, r.workingDir),
-				"-w", r.workingDir,
-				"--rm",
-				"-it",
-				"alpine",
-				"chmod", "0777", path).Run()
-		}); err != nil {
-			return messaging.StatusStepFailed, err
-		}
 
 		exposerURL := r.cfg.GetString("k8s.app-exposer.base")
 		exposerHost := r.cfg.GetString("k8s.app-exposer.host-header")

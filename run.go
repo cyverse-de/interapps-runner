@@ -262,7 +262,8 @@ func (r *JobRunner) downloadInputs(ctx context.Context) (messaging.StatusCode, e
 
 // ImageUser returns the UID of the image's default user, or 0 if it's not set.
 func (r *JobRunner) ImageUser(ctx context.Context, image string) (int, error) {
-	out, err := exec.CommandContext(ctx, "docker", "image", "inspect", "-f", "{{.Config.User}}", image).Output()
+	dockerPath := r.cfg.GetString("docker.path")
+	out, err := exec.CommandContext(ctx, dockerPath, "image", "inspect", "-f", "{{.Config.User}}", image).Output()
 	if err != nil {
 		return -1, err
 	}

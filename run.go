@@ -360,7 +360,16 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 
 		if err = filepath.Walk(r.workingDir, func(path string, f os.FileInfo, err error) error {
 			log.Printf("chmod %s 0777\n", path)
-			return os.Chmod(path, 0777)
+			dockerPath := r.cfg.GetString("docker.path")
+			return exec.CommandContext(
+				ctx,
+				dockerPath,
+				"-v", fmt.Sprintf("%s:%s", r.workingDir, r.workingDir),
+				"-w", r.workingDir,
+				"--rm",
+				"-it",
+				"alpine",
+				"chmod", "0777", path).Run()
 		}); err != nil {
 			return messaging.StatusStepFailed, err
 		}

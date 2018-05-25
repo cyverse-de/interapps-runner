@@ -133,17 +133,9 @@ func main() {
 			if job == nil {
 				log.Warn("Info didn't get parsed from the job file, can't clean up. Probably don't need to.")
 			}
-			if job != nil {
-				cancel()
-			}
 			if client != nil && job != nil {
 				fail(client, job, fmt.Sprintf("Received signal %s", sig))
 			}
-
-			// I would think that this would trigger the deferred cancel(), but it's
-			// called explicitly above. Multiple calls to cancel() shouldn't hurt
-			// anything.
-			os.Exit(-1)
 		},
 		func() {
 			log.Info("Signal handler is quitting")
@@ -304,11 +296,8 @@ func main() {
 	// The channel that the exit code will be passed along on.
 	exit := make(chan messaging.StatusCode)
 
-	// Could probably reuse the exit channel, but that's less explicit.
-	finalExit := make(chan messaging.StatusCode)
-
 	// Launch the go routine that will handle job exits by signal or timer.
-	go Exit(cancel, exit, finalExit)
+	go Exit(cancel, exit)
 
 	// Listen for stop requests. Make sure Listen() is called before the stop
 	// request message consumer is added, otherwise there's a race condition that
@@ -328,11 +317,7 @@ func main() {
 	)
 
 	// Actually execute all of the job steps.
-	go Run(ctx, client, job, cfg, exit, availablePort)
-
-	// Block waiting for the exit code, which will either come from the Run()
-	// goroutine or from Condor passing along a signal.
-	exitCode := <-finalExit
+	exitCode := Run(ctx, client, job, cfg, exit, availablePort)
 
 	// Clean up the job file. Cleaning it out will prevent image-janitor and
 	// network-pruner from continuously trying to clean up after the job.

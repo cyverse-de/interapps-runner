@@ -551,7 +551,7 @@ func (r *JobRunner) dockerComposePull(ctx context.Context, composePath string) e
 }
 
 // Run executes the job, and returns the exit code on the exit channel.
-func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan messaging.StatusCode, availablePort int) {
+func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, exit chan messaging.StatusCode, availablePort int) messaging.StatusCode {
 	host, err := os.Hostname()
 	if err != nil {
 		log.Error(err)
@@ -653,5 +653,5 @@ func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *vi
 		log.Errorf("%+v\n", err)
 	}
 
-	exit <- runner.status
+	return runner.status
 }

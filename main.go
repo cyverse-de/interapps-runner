@@ -134,7 +134,7 @@ func main() {
 				log.Warn("Info didn't get parsed from the job file, can't clean up. Probably don't need to.")
 			}
 			if job != nil {
-				cleanup(cfg)
+				cancel()
 			}
 			if client != nil && job != nil {
 				fail(client, job, fmt.Sprintf("Received signal %s", sig))
@@ -308,7 +308,7 @@ func main() {
 	finalExit := make(chan messaging.StatusCode)
 
 	// Launch the go routine that will handle job exits by signal or timer.
-	go Exit(cfg, exit, finalExit)
+	go Exit(cancel, exit, finalExit)
 
 	// Listen for stop requests. Make sure Listen() is called before the stop
 	// request message consumer is added, otherwise there's a race condition that

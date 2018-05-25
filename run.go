@@ -414,11 +414,27 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 				strings.Join(step.Arguments(), " "),
 			),
 		)
+
+		// I'm not sure if ignoring the errors here (aside from logging them) is the
+		// right thing to do, but it's easy to fix if it becomes a problem. Just
+		// return messaging.StatusStepFailed and the error.
+		if err = DeleteK8SEndpoint(exposerURL, exposerHost, ingressID); err != nil {
+			log.Errorf("%+v\n", err)
+		}
+
+		if err = DeleteK8SService(exposerURL, exposerHost, ingressID); err != nil {
+			log.Errorf("%+v\n", err)
+		}
+
+		if err = DeleteK8SIngress(exposerURL, exposerHost, ingressID); err != nil {
+			log.Errorf("%+v\n", err)
+		}
 	}
+
 	return messaging.Success, err
 }
 
-func (r *JobRunner) uploadOutputs(ctx context.Context) (messaging.StatusCode, error) {
+func (r *JobRunner) uploadOutputs() (messaging.StatusCode, error) {
 	var err error
 
 	stdout, err := os.Create(path.Join(r.logsDir, fmt.Sprintf("logs-stdout-output")))
@@ -438,7 +454,9 @@ func (r *JobRunner) uploadOutputs(ctx context.Context) (messaging.StatusCode, er
 		fmt.Sprintf("VAULT_TOKEN=%s", r.cfg.GetString("vault.token")),
 	}
 
-	if err = r.execDockerCompose(ctx, "upload_outputs", env, stdout, stderr); err != nil {
+	// We're using the background context so that this stuff will run even when
+	// the job is cancelled.
+	if err = r.execDockerCompose(context.Background(), "upload_outputs", env, stdout, stderr); err != nil {
 		running(r.client, r.job, fmt.Sprintf("Error uploading outputs to %s: %s", r.job.OutputDirectory(), err.Error()))
 		return messaging.StatusOutputFailed, errors.Wrapf(err, "failed to upload outputs to %s", r.job.OutputDirectory())
 	}
@@ -601,21 +619,39 @@ func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *vi
 			log.Error(err)
 		}
 	}
+
 	// Always attempt to transfer outputs. There might be logs that can help
 	// debug issues when the job fails.
 	var outputStatus messaging.StatusCode
 	running(runner.client, runner.job, fmt.Sprintf("Beginning to upload outputs to %s", runner.job.OutputDirectory()))
-	if outputStatus, err = runner.uploadOutputs(ctx); err != nil {
+	if outputStatus, err = runner.uploadOutputs(); err != nil {
 		log.Error(err)
 	}
 	if outputStatus != messaging.Success {
 		runner.status = outputStatus
 	}
+
 	// Always inform upstream of the job status.
 	if runner.status != messaging.Success {
 		fail(runner.client, runner.job, fmt.Sprintf("Job exited with a status of %d", runner.status))
 	} else {
 		success(runner.client, runner.job)
 	}
+
+	// Clean up, you filthy animal
+	downCommand := exec.Command(composePath, "-p", runner.projectName, "-f", "docker-compose.yml", "down", "-v")
+	downCommand.Stderr = log.Writer()
+	downCommand.Stdout = log.Writer()
+	if err = downCommand.Run(); err != nil {
+		log.Errorf("%+v\n", err)
+	}
+
+	netCmd := exec.Command(dockerPath, "network", "rm", fmt.Sprintf("%s_default", runner.projectName))
+	netCmd.Stderr = log.Writer()
+	netCmd.Stdout = log.Writer()
+	if err = netCmd.Run(); err != nil {
+		log.Errorf("%+v\n", err)
+	}
+
 	exit <- runner.status
 }

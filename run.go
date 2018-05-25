@@ -380,8 +380,12 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 		}
 		if userUID != 0 {
 			if err = filepath.Walk(r.workingDir, func(path string, f os.FileInfo, err error) error {
-				log.Printf("chowning %s to %d:0\n", path, userUID)
-				return os.Chown(path, userUID, 0)
+				log.Printf("chowning %s to %d:%d\n", path, userUID, os.Getgid())
+				if err = os.Chown(path, userUID, os.Getgid()); err != nil {
+					return err
+				}
+				log.Printf("chmod %s 0764\n", path)
+				return os.Chmod(path, 0764)
 			}); err != nil {
 				return messaging.StatusStepFailed, err
 			}

@@ -377,6 +377,7 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 		imgName := fmt.Sprintf("%s:%s", step.Component.Container.Image.Name, step.Component.Container.Image.Name)
 		userUID, err := r.ImageUser(ctx, imgName)
 		if err != nil {
+			log.Println(err)
 			return messaging.StatusStepFailed, err
 		}
 		if userUID != 0 {
@@ -388,6 +389,7 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 				log.Printf("chmod %s 0764\n", path)
 				return os.Chmod(path, 0764)
 			}); err != nil {
+				log.Println(err)
 				return messaging.StatusStepFailed, err
 			}
 		}

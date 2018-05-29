@@ -10,7 +10,11 @@ import (
 
 func portOkay(port int) bool {
 	p, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	defer p.Close()
+	defer func() {
+		if p != nil {
+			p.Close()
+		}
+	}()
 	if err != nil {
 		return false
 	}

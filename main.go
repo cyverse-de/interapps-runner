@@ -116,6 +116,7 @@ func main() {
 		proxyLower  = flag.Int("proxy-lower-bound", 31300, "Lower bound in port numbers that the proxy may be reached through.")
 		exposerURL  = flag.String("exposer-url", "", "The base URL to the app-exposer service.")
 		exposerHost = flag.String("exposer-host-header", "app-exposer", "The value of the Host header in requests to the app-exposer API.")
+		setfaclPath = flag.String("setfacl-path", "/usr/bin/setfacl", "The path to the setfacl binary")
 		err         error
 		cfg         *viper.Viper
 	)
@@ -181,6 +182,7 @@ func main() {
 	cfg.Set("docker.cfg", *dockerCfg)
 	cfg.Set("proxy.lower", *proxyLower)
 	cfg.Set("proxy.upper", *proxyUpper)
+	cfg.Set("setfacl.path", *setfaclPath)
 
 	if cfg.GetString("k8s.frontend.base") == "" {
 		log.Fatal("k8s.frontend.base must be set in the configuration file")

@@ -291,7 +291,8 @@ func (r *JobRunner) ImageUser(ctx context.Context, image string) (int, error) {
 // that gets mounted into each container that runs as part of the job. It grants
 // rwx perms recursively. It is not a default ACL.
 func (r *JobRunner) AddWorkingVolumeACL(ctx context.Context, uid int) error {
-	cmd := exec.CommandContext(ctx, "setfacl", "-r", "-m", fmt.Sprintf("u:%d:rwx", uid), r.volumeDir)
+	setfaclPath := r.cfg.GetString("setfacl.path")
+	cmd := exec.CommandContext(ctx, setfaclPath, "-r", "-m", fmt.Sprintf("u:%d:rwx", uid), r.volumeDir)
 	cmd.Env = os.Environ()
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
@@ -301,7 +302,8 @@ func (r *JobRunner) AddWorkingVolumeACL(ctx context.Context, uid int) error {
 // RemoveWorkingVolumeACL removes an ACL for the given UID from the working
 // directory that gets mounted into each container that runs as part of the job.
 func (r *JobRunner) RemoveWorkingVolumeACL(ctx context.Context, uid int) error {
-	cmd := exec.CommandContext(ctx, "setfacl", "-r", "-x", fmt.Sprintf("u:%d", uid), r.volumeDir)
+	setfaclPath := r.cfg.GetString("setfacl.path")
+	cmd := exec.CommandContext(ctx, setfaclPath, "-r", "-x", fmt.Sprintf("u:%d", uid), r.volumeDir)
 	cmd.Env = os.Environ()
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter

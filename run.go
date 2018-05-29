@@ -80,7 +80,7 @@ func NewJobRunner(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, e
 
 // Init will initialize the state for a JobRunner. The volumeDir and logsDir
 // will get created.
-func (r *JobRunner) Init() error {
+func (r *JobRunner) Init(ctx context.Context) error {
 	err := os.MkdirAll(r.logsDir, 0755)
 	if err != nil {
 		return err
@@ -92,13 +92,30 @@ func (r *JobRunner) Init() error {
 	// modify ACLs on a per-step basis so that the container user will be able to
 	// use files created by other containers.
 	uid := os.Getuid()
-	setfaclPath := r.cfg.GetString("setfacl.path")
-	aclCmd := exec.Command(setfaclPath, "-R", "-m", fmt.Sprintf("d:u:%d:rwx", uid), r.volumeDir)
-	aclCmd.Env = os.Environ()
-	aclCmd.Stdout = logWriter
-	aclCmd.Stderr = logWriter
-	if err = aclCmd.Run(); err != nil {
+	if err = r.AddWorkingVolumeACL(ctx, uid); err != nil {
 		return err
+	}
+
+	for _, step := range r.job.Steps {
+		// The user ID recorded in the image is probably the user the container is
+		// going to run as, so we need to make sure that user can access the files
+		// in the working directory.
+		imgName := fmt.Sprintf(
+			"%s:%s",
+			step.Component.Container.Image.Name,
+			step.Component.Container.Image.Tag,
+		)
+		imgUID, err := r.ImageUser(ctx, imgName)
+		if err != nil {
+			return err
+		}
+
+		// This should enable the user recorded in the image to access the files in
+		// the bind mounted working volume. We have a default ACL that lets the user
+		// interapps-runner is running as access the files as well.
+		if err = r.AddWorkingVolumeACL(ctx, imgUID); err != nil {
+			return err
+		}
 	}
 
 	err = os.MkdirAll(r.tmpDir, 0755)
@@ -292,8 +309,9 @@ func (r *JobRunner) ImageUser(ctx context.Context, image string) (int, error) {
 // that gets mounted into each container that runs as part of the job. It grants
 // rwx perms recursively. It is not a default ACL.
 func (r *JobRunner) AddWorkingVolumeACL(ctx context.Context, uid int) error {
+	log.Printf("adding rwx acl on %s recursively for uid %d", r.volumeDir, uid)
 	setfaclPath := r.cfg.GetString("setfacl.path")
-	cmd := exec.CommandContext(ctx, setfaclPath, "-R", "-m", fmt.Sprintf("u:%d:rwx", uid), r.volumeDir)
+	cmd := exec.CommandContext(ctx, setfaclPath, "-R", "-m", fmt.Sprintf("d:u:%d:rwx", uid), r.volumeDir)
 	cmd.Env = os.Environ()
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
@@ -303,6 +321,7 @@ func (r *JobRunner) AddWorkingVolumeACL(ctx context.Context, uid int) error {
 // RemoveWorkingVolumeACL removes an ACL for the given UID from the working
 // directory that gets mounted into each container that runs as part of the job.
 func (r *JobRunner) RemoveWorkingVolumeACL(ctx context.Context, uid int) error {
+	log.Printf("removing rwx acl on %s recursively for uid %d", r.volumeDir, uid)
 	setfaclPath := r.cfg.GetString("setfacl.path")
 	cmd := exec.CommandContext(ctx, setfaclPath, "-R", "-x", fmt.Sprintf("u:%d", uid), r.volumeDir)
 	cmd.Env = os.Environ()
@@ -367,11 +386,13 @@ func (r *JobRunner) websocketURL(step *model.Step, backendURL string) (string, e
 }
 
 func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, error) {
-	var err error
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
 	for idx, step := range r.job.Steps {
+		stepStatus := messaging.Success
+		var stepErr error
+
 		running(r.client, r.job,
 			fmt.Sprintf(
 				"Running tool container %s:%s with arguments: %s",
@@ -380,28 +401,6 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 				strings.Join(step.Arguments(), " "),
 			),
 		)
-
-		// The user ID recorded in the image is probably the user the container is
-		// going to run as, so we need to make sure that user can access the files
-		// in the working directory.
-		imgName := fmt.Sprintf(
-			"%s:%s",
-			step.Component.Container.Image.Name,
-			step.Component.Container.Image.Tag,
-		)
-		imgUID, err := r.ImageUser(ctx, imgName)
-		if err != nil {
-			running(r.client, r.job, fmt.Sprintf("error getting image user: %s", err.Error()))
-			return messaging.StatusStepFailed, err
-		}
-
-		// This should enable the user recorded in the image to access the files in
-		// the bind mounted working volume. We have a default ACL that lets the user
-		// interapps-runner is running as access the files as well.
-		if err = r.AddWorkingVolumeACL(ctx, imgUID); err != nil {
-			running(r.client, r.job, fmt.Sprintf("error adding working volume acl: %s", err.Error()))
-			return messaging.StatusStepFailed, err
-		}
 
 		stdout, err := os.Create(path.Join(r.logsDir, fmt.Sprintf("docker-compose-step-stdout-%d", idx)))
 		if err != nil {
@@ -492,7 +491,8 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 				),
 			)
 
-			return messaging.StatusStepFailed, err
+			stepStatus = messaging.StatusStepFailed
+			stepErr = err
 		}
 
 		running(r.client, r.job,
@@ -524,18 +524,12 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 		}
 		log.Printf("done deleting K8s ingress %s\n", ingressID)
 
-		// Having this fail *shouldn't* be the end of the world, since everything in
-		// the job working directory is going to get nuked when the job finishes
-		// anyway, but we should still make an attempt to clean up as nicely as
-		// possible.
-		log.Println("removing working volume acl")
-		if err = r.RemoveWorkingVolumeACL(ctx, imgUID); err != nil {
-			running(r.client, r.job, fmt.Sprintf("error removing working volume acl: %s", err.Error()))
+		if stepErr != nil {
+			return stepStatus, stepErr
 		}
-		log.Println("done removing working volume acl")
 	}
 
-	return messaging.Success, err
+	return messaging.Success, nil
 }
 
 func (r *JobRunner) uploadOutputs() (messaging.StatusCode, error) {
@@ -667,7 +661,7 @@ func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *vi
 		log.Error(err)
 	}
 
-	err = runner.Init()
+	err = runner.Init(ctx)
 	if err != nil {
 		log.Error(err)
 	}

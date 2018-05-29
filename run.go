@@ -92,7 +92,8 @@ func (r *JobRunner) Init() error {
 	// modify ACLs on a per-step basis so that the container user will be able to
 	// use files created by other containers.
 	uid := os.Getuid()
-	aclCmd := exec.Command("setfacl", "-r", "-m", fmt.Sprintf("d:u:%d:rwx", uid), r.volumeDir)
+	setfaclPath := r.cfg.GetString("setfacl.path")
+	aclCmd := exec.Command(setfaclPath, "-r", "-m", fmt.Sprintf("d:u:%d:rwx", uid), r.volumeDir)
 	aclCmd.Env = os.Environ()
 	aclCmd.Stdout = logWriter
 	aclCmd.Stderr = logWriter

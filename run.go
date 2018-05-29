@@ -93,6 +93,7 @@ func (r *JobRunner) Init() error {
 	// use files created by other containers.
 	uid := os.Getuid()
 	aclCmd := exec.Command("setfacl", "-r", "-m", fmt.Sprintf("d:u:%d:rwx", uid), r.volumeDir)
+	aclCmd.Env = os.Environ()
 	aclCmd.Stdout = logWriter
 	aclCmd.Stderr = logWriter
 	if err = aclCmd.Run(); err != nil {
@@ -291,6 +292,7 @@ func (r *JobRunner) ImageUser(ctx context.Context, image string) (int, error) {
 // rwx perms recursively. It is not a default ACL.
 func (r *JobRunner) AddWorkingVolumeACL(ctx context.Context, uid int) error {
 	cmd := exec.CommandContext(ctx, "setfacl", "-r", "-m", fmt.Sprintf("u:%d:rwx", uid), r.volumeDir)
+	cmd.Env = os.Environ()
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
 	return cmd.Run()
@@ -300,6 +302,7 @@ func (r *JobRunner) AddWorkingVolumeACL(ctx context.Context, uid int) error {
 // directory that gets mounted into each container that runs as part of the job.
 func (r *JobRunner) RemoveWorkingVolumeACL(ctx context.Context, uid int) error {
 	cmd := exec.CommandContext(ctx, "setfacl", "-r", "-x", fmt.Sprintf("u:%d", uid), r.volumeDir)
+	cmd.Env = os.Environ()
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
 	return cmd.Run()

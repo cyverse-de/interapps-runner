@@ -93,7 +93,7 @@ func (r *JobRunner) Init() error {
 	// use files created by other containers.
 	uid := os.Getuid()
 	setfaclPath := r.cfg.GetString("setfacl.path")
-	aclCmd := exec.Command(setfaclPath, "-r", "-m", fmt.Sprintf("d:u:%d:rwx", uid), r.volumeDir)
+	aclCmd := exec.Command(setfaclPath, "-R", "-m", fmt.Sprintf("d:u:%d:rwx", uid), r.volumeDir)
 	aclCmd.Env = os.Environ()
 	aclCmd.Stdout = logWriter
 	aclCmd.Stderr = logWriter

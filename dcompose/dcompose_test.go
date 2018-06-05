@@ -343,7 +343,7 @@ func TestNew(t *testing.T) {
 	if jc == nil {
 		t.Error("New() returned nil")
 	}
-	if jc.Version != "2.1" {
+	if jc.Version != "2.2" {
 		t.Errorf("version was %s", jc.Version)
 	}
 }

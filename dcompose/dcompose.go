@@ -122,6 +122,7 @@ type Service struct {
 	CapDrop       []string          `yaml:"cap_drop,flow"`
 	Command       []string          `yaml:",omitempty"`
 	ContainerName string            `yaml:"container_name,omitempty"`
+	CPUs          string            `yaml:"cpus,omitempty"`
 	CPUSet        string            `yaml:"cpuset,omitempty"`
 	CPUShares     int64             `yaml:"cpu_shares,omitempty"`
 	CPUQuota      string            `yaml:"cpu_quota,omitempty"`
@@ -171,7 +172,7 @@ func New(ld string, pathprefix string) (*JobCompose, error) {
 	}
 
 	return &JobCompose{
-		Version:  "2.1",
+		Version:  "2.2",
 		Volumes:  make(map[string]*Volume),
 		Networks: make(map[string]*Network),
 		Services: make(map[string]*Service),
@@ -410,8 +411,12 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 		svc.EntryPoint = stepContainer.EntryPoint
 	}
 
+	// If a memory limit is set, use it. Otherwise default to allocating 4GB of
+	// RAM for the container. For now we won't worry about the swap limit.
 	if stepContainer.MemoryLimit > 0 {
 		svc.MemLimit = strconv.FormatInt(stepContainer.MemoryLimit, 10)
+	} else {
+		svc.MemLimit = "4g"
 	}
 
 	if stepContainer.CPUShares > 0 {
@@ -420,6 +425,14 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 
 	if stepContainer.PIDsLimit > 0 {
 		svc.PIDsLimit = stepContainer.PIDsLimit
+	}
+
+	// If the MaxCPUCores setting is provided, use it. Otherwise, default to
+	// limiting the container to 2.0 cores.
+	if stepContainer.MaxCPUCores > 0.0 {
+		svc.CPUs = fmt.Sprintf("%f", stepContainer.MaxCPUCores)
+	} else {
+		svc.CPUs = "2.0"
 	}
 
 	// Handles volumes created by other containers.

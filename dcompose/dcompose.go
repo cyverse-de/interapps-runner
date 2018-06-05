@@ -11,7 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
-	"gopkg.in/cyverse-de/model.v2"
+	"gopkg.in/cyverse-de/model.v3"
 )
 
 // WORKDIR is the path to the working directory inside all of the containers

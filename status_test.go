@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"gopkg.in/cyverse-de/messaging.v4"
-	"gopkg.in/cyverse-de/model.v2"
+	"gopkg.in/cyverse-de/model.v3"
 )
 
 type TestJobUpdatePublisher struct {

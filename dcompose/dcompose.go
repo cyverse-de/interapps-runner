@@ -31,6 +31,8 @@ const VOLUMEDIR = "workingvolume"
 const TMPDIR = "tmpfiles"
 
 const (
+	// UploadExcludesFilename is the filename for the list of files that should
+	// not be uploaded when the app is finished executing.
 	UploadExcludesFilename string = "porklock-upload-exclusions.txt"
 
 	// TypeLabel is the label key applied to every container.

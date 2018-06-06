@@ -7,6 +7,15 @@
   revision = "7cb335597f9b972d380a6787a95b34f4a4705d5d"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/cyverse-de/interapps-runner"
+  packages = [
+    "dcompose",
+    "fs"
+  ]
+  revision = "d7617fcd11fa2c1d2dbae9ce296c436c5caa75ab"
+
+[[projects]]
   name = "github.com/cyverse-de/model"
   packages = ["submitfile"]
   revision = "113ec31a835eeae946f593d79d2e1febb2127e66"
@@ -154,6 +163,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f68f231e2ee391b2041136cc2fc8e25e6bfc1546323e757924125d7f3289ec2a"
+  inputs-digest = "985f20c87e84f2ebe35a369aad4cf8be455664577eb315398184432f4079d156"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -79,6 +79,25 @@ const ConfigVaultURLKey = "vault.url"
 // ConfigVaultTokenKey is the key for the Vault token configuration setting.
 const ConfigVaultTokenKey = "vault.token"
 
+// ConfigPorklockImageKey is the key for the porklock image configuration
+// setting.
+const ConfigPorklockImageKey = "porklock.image"
+
+// ConfigPorklockTagKey is the key for the porklock image tag configuration
+// setting.
+const ConfigPorklockTagKey = "porklock.tag"
+
+// ConfigAMQPURIKey is the key for the AMQP URI configuration setting.
+const ConfigAMQPURIKey = "amqp.uri"
+
+// ConfigAMQPExchangeNameKey is the key for the AMQP Exchange Name configuration
+// setting.
+const ConfigAMQPExchangeNameKey = "amqp.exchange.name"
+
+// ConfigAMQPExchangeTypeKey is the key for the AMQP Exchange Type configuration
+// setting.
+const ConfigAMQPExchangeTypeKey = "amqp.exchange.type"
+
 var (
 	job              *model.Job
 	client           *messaging.Client
@@ -314,9 +333,9 @@ func main() {
 
 	// Configure and initialize the AMQP connection. It will be used to listen for
 	// stop requests and send out job status notifications.
-	uri := cfg.GetString("amqp.uri")
-	amqpExchangeName = cfg.GetString("amqp.exchange.name")
-	amqpExchangeType = cfg.GetString("amqp.exchange.type")
+	uri := cfg.GetString(ConfigAMQPURIKey)
+	amqpExchangeName = cfg.GetString(ConfigAMQPExchangeNameKey)
+	amqpExchangeType = cfg.GetString(ConfigAMQPExchangeTypeKey)
 	client, err = messaging.NewClient(uri, true)
 	if err != nil {
 		log.Fatal(err)

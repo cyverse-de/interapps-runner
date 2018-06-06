@@ -105,7 +105,8 @@ func (r *JobRunner) Init(ctx context.Context) error {
 			step.Component.Container.Image.Name,
 			step.Component.Container.Image.Tag,
 		)
-		imgUID, err := r.ImageUser(ctx, imgName)
+		var imgUID int
+		imgUID, err = r.ImageUser(ctx, imgName)
 		if err != nil {
 			return err
 		}

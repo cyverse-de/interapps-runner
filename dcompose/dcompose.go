@@ -416,9 +416,9 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 	// If a memory limit is set, use it. Otherwise default to allocating 4GB of
 	// RAM for the container. For now we won't worry about the swap limit.
 	if stepContainer.MemoryLimit > 0 {
-		svc.MemLimit = strconv.FormatInt(stepContainer.MemoryLimit, 10)
+		svc.MemLimit = fmt.Sprintf("%db", stepContainer.MemoryLimit)
 	} else {
-		svc.MemLimit = "4g"
+		svc.MemLimit = fmt.Sprintf("%db", cfg.GetInt64("resources.memory-limit"))
 	}
 
 	if stepContainer.CPUShares > 0 {
@@ -434,7 +434,7 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 	if stepContainer.MaxCPUCores > 0.0 {
 		svc.CPUs = fmt.Sprintf("%f", stepContainer.MaxCPUCores)
 	} else {
-		svc.CPUs = "2.0"
+		svc.CPUs = fmt.Sprintf("%f", cfg.GetFloat64("resources.max-cpu-cores"))
 	}
 
 	// Handles volumes created by other containers.

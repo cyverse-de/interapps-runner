@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,8 +9,30 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/pkg/errors"
+
 	"gopkg.in/cyverse-de/model.v3"
 )
+
+// copyJobFile copies the contents of from to a file called <uuid>.json inside
+// the directory specified by toDir.
+func copyJobFile(fs FileSystem, uuid, from, toDir string) error {
+	inputReader, err := fs.Open(from)
+	if err != nil {
+		return errors.Wrapf(err, "failed to open %s", from)
+	}
+	defer inputReader.Close()
+	outputFilePath := path.Join(toDir, fmt.Sprintf("%s.json", uuid))
+	outputWriter, err := fs.Create(outputFilePath)
+	if err != nil {
+		return errors.Wrapf(err, "failed to write to %s", outputFilePath)
+	}
+	defer outputWriter.Close()
+	if _, err := io.Copy(outputWriter, inputReader); err != nil {
+		return errors.Wrapf(err, "failed to copy contents of %s to %s", from, toDir)
+	}
+	return nil
+}
 
 type testFS struct {
 	filemap    map[string]*byteFile
@@ -83,60 +104,6 @@ func (t *testFS) Remove(path string) error {
 	return nil
 }
 
-func TestCopyJobFile(t *testing.T) {
-	tfs := newTestFS()
-	uuid := "00000000-0000-0000-0000-000000000000"
-	from := path.Join("test", fmt.Sprintf("%s.json", uuid))
-	c, err := tfs.Create(from)
-	if err != nil {
-		t.Error(err)
-	}
-	c.Write([]byte("this is a test"))
-	to := "/tmp"
-	err = CopyJobFile(tfs, uuid, from, to)
-	if err != nil {
-		t.Error(err)
-	}
-	tmpPath := path.Join(to, fmt.Sprintf("%s.json", uuid))
-	if _, err = tfs.Open(tmpPath); err != nil {
-		t.Error(err)
-	}
-
-	// test failures from the Open() function
-	tfs = newTestFS()
-	tfs.failOpen = true
-	err = CopyJobFile(tfs, uuid, from, to)
-	if err == nil {
-		t.Error(err)
-	}
-
-	// test failures from the Create() function.
-	tfs = newTestFS()
-	c, err = tfs.Create(from)
-	if err != nil {
-		t.Error(err)
-	}
-	c.Write([]byte("this is a test"))
-	tfs.failCreate = true
-	err = CopyJobFile(tfs, uuid, from, to)
-	if err == nil {
-		t.Error(err)
-	}
-
-	// test failures from the Copy() function.
-	tfs = newTestFS()
-	c, err = tfs.Create(from)
-	if err != nil {
-		t.Error(err)
-	}
-	c.Write([]byte("this is a test"))
-	tfs.failFile = true
-	err = CopyJobFile(tfs, uuid, from, to)
-	if err == nil {
-		t.Error(err)
-	}
-}
-
 func TestDeleteJobFile(t *testing.T) {
 	tfs := newTestFS()
 	uuid := "00000000-0000-0000-0000-000000000000"
@@ -147,7 +114,7 @@ func TestDeleteJobFile(t *testing.T) {
 	}
 	c.Write([]byte("this is a test"))
 	to := "/tmp"
-	err = CopyJobFile(tfs, uuid, from, to)
+	err = copyJobFile(tfs, uuid, from, to)
 	if err != nil {
 		t.Error(err)
 	}
@@ -169,7 +136,7 @@ func TestDeleteJobFileFail(t *testing.T) {
 	}
 	c.Write([]byte("this is a test"))
 	to := "/tmp"
-	err = CopyJobFile(tfs, uuid, from, to)
+	err = copyJobFile(tfs, uuid, from, to)
 	if err != nil {
 		t.Error(err)
 	}

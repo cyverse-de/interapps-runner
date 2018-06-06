@@ -88,10 +88,15 @@ func NewJobComposition(ld string, pathprefix string) (*JobComposition, error) {
 
 // Composer orchestrates the creation of the docker-compose file for a job.
 type Composer struct {
-	job         *model.Job
-	cfg         *viper.Viper
-	composition *JobComposition
-	ingressID   string // This shouldn't be accessed directly. Use IngressID().
+	job             *model.Job
+	cfg             *viper.Viper
+	composition     *JobComposition
+	ingressID       string // This shouldn't be accessed directly. Use IngressID().
+	porklockImage   string
+	porklockTag     string
+	memoryLimit     int64
+	maxCPUCores     float64
+	frontendBaseURL string
 }
 
 // NewComposer returns a new *Composer.
@@ -101,9 +106,14 @@ func NewComposer(job *model.Job, cfg *viper.Viper, logDriver, pathPrefix string)
 		return nil, err
 	}
 	return &Composer{
-		job:         job,
-		cfg:         cfg,
-		composition: c,
+		job:             job,
+		cfg:             cfg,
+		composition:     c,
+		porklockImage:   cfg.GetString(ConfigPorklockImageKey),
+		porklockTag:     cfg.GetString(ConfigPorklockTagKey),
+		memoryLimit:     cfg.GetInt64(ConfigMemoryLimitKey),
+		maxCPUCores:     cfg.GetFloat64(ConfigMaxCPUCoresKey),
+		frontendBaseURL: cfg.GetString(ConfigFrontendBaseKey),
 	}, nil
 }
 
@@ -127,7 +137,7 @@ func (c *Composer) FrontendURL(step *model.Step) (string, error) {
 	if step.Component.Container.InteractiveApps.FrontendURL != "" {
 		unmodifiedURL = step.Component.Container.InteractiveApps.FrontendURL
 	} else {
-		unmodifiedURL = c.cfg.GetString(ConfigFrontendBaseKey)
+		unmodifiedURL = c.frontendBaseURL
 	}
 
 	fURL, err = url.Parse(unmodifiedURL)
@@ -213,9 +223,7 @@ func (c *Composer) InitFromJob(workingdir string, availablePort int) error {
 	workingVolumeHostPath := path.Join(workingdir, VOLUMEDIR)
 	// The volume containing the local working directory
 
-	porklockImage := c.cfg.GetString(ConfigPorklockImageKey)
-	porklockTag := c.cfg.GetString(ConfigPorklockTagKey)
-	porklockImageName := fmt.Sprintf("%s:%s", porklockImage, porklockTag)
+	porklockImageName := fmt.Sprintf("%s:%s", c.porklockImage, c.porklockTag)
 
 	for index, dc := range job.DataContainers() {
 		svcKey := fmt.Sprintf("data_%d", index)
@@ -267,7 +275,6 @@ func (c *Composer) InitFromJob(workingdir string, availablePort int) error {
 	for index, step := range job.Steps {
 		stepcfg := &ConvertStepParams{
 			Step:               &step,
-			Cfg:                c.cfg,
 			Index:              index,
 			User:               job.Submitter,
 			UserID:             job.UserID,
@@ -349,7 +356,6 @@ func websocketURL(step *model.Step, backendURL string) (string, error) {
 // ConvertStepParams contains the info needed to call ConvertStep()
 type ConvertStepParams struct {
 	Step               *model.Step
-	Cfg                *viper.Viper
 	Index              int
 	User               string
 	UserID             string
@@ -363,7 +369,6 @@ type ConvertStepParams struct {
 func (c *Composer) ConvertStep(s *ConvertStepParams) error {
 	var (
 		step               = s.Step
-		cfg                = s.Cfg
 		index              = s.Index
 		user               = s.User
 		workingDirHostPath = s.WorkingDirHostPath
@@ -439,7 +444,7 @@ func (c *Composer) ConvertStep(s *ConvertStepParams) error {
 	if stepContainer.MemoryLimit > 0 {
 		svc.MemLimit = fmt.Sprintf("%db", stepContainer.MemoryLimit)
 	} else {
-		svc.MemLimit = fmt.Sprintf("%db", cfg.GetInt64(ConfigMemoryLimitKey))
+		svc.MemLimit = fmt.Sprintf("%db", c.memoryLimit)
 	}
 
 	if stepContainer.CPUShares > 0 {
@@ -455,7 +460,7 @@ func (c *Composer) ConvertStep(s *ConvertStepParams) error {
 	if stepContainer.MaxCPUCores > 0.0 {
 		svc.CPUs = fmt.Sprintf("%f", stepContainer.MaxCPUCores)
 	} else {
-		svc.CPUs = fmt.Sprintf("%f", cfg.GetFloat64(ConfigMaxCPUCoresKey))
+		svc.CPUs = fmt.Sprintf("%f", c.maxCPUCores)
 	}
 
 	// Handles volumes created by other containers.

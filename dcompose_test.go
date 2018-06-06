@@ -359,7 +359,6 @@ func TestConvertStep(t *testing.T) {
 
 	stepcfg := &ConvertStepParams{
 		Step:               &testJob.Steps[0],
-		Cfg:                cfg,
 		Index:              0,
 		User:               testJob.Submitter,
 		InvID:              testJob.InvocationID,

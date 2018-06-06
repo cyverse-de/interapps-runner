@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cyverse-de/interapps-runner/fs"
 	"github.com/kr/pty"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -131,14 +130,14 @@ func (r *JobRunner) Init(ctx context.Context) error {
 	}
 
 	// Copy docker-compose file to the log dir for debugging purposes.
-	err = fs.CopyFile(fs.FS, "docker-compose.yml", path.Join(r.logsDir, "docker-compose.yml"))
+	err = CopyFile(FS, "docker-compose.yml", path.Join(r.logsDir, "docker-compose.yml"))
 	if err != nil {
 		// Log error and continue.
 		log.Error(err)
 	}
 
 	// Copy upload exclude list to the log dir for debugging purposes.
-	err = fs.CopyFile(fs.FS, UploadExcludesFilename, path.Join(r.logsDir, UploadExcludesFilename))
+	err = CopyFile(FS, UploadExcludesFilename, path.Join(r.logsDir, UploadExcludesFilename))
 	if err != nil {
 		// Log error and continue.
 		log.Error(err)
@@ -687,11 +686,11 @@ func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *vi
 		runner.status = messaging.StatusDockerPullFailed
 	}
 
-	if err = fs.WriteJobSummary(fs.FS, runner.logsDir, job); err != nil {
+	if err = WriteJobSummary(FS, runner.logsDir, job); err != nil {
 		log.Error(err)
 	}
 
-	if err = fs.WriteJobParameters(fs.FS, runner.logsDir, job); err != nil {
+	if err = WriteJobParameters(FS, runner.logsDir, job); err != nil {
 		log.Error(err)
 	}
 

@@ -29,74 +29,76 @@ import (
 	"github.com/spf13/viper"
 )
 
-// ConfigDockerComposePathKey is the key for the config setting with the path
-// to the docker-compose executable.
-const ConfigDockerComposePathKey = "docker-compose.path"
+const (
+	// ConfigDockerComposePathKey is the key for the config setting with the path
+	// to the docker-compose executable.
+	ConfigDockerComposePathKey = "docker-compose.path"
 
-// ConfigDockerPathKey is the key for the config setting with the path to the
-// docker executable.
-const ConfigDockerPathKey = "docker.path"
+	// ConfigDockerPathKey is the key for the config setting with the path to the
+	// docker executable.
+	ConfigDockerPathKey = "docker.path"
 
-// ConfigDockerCFGKey is the key for the config setting with the path to the
-// docker client configuration file.
-const ConfigDockerCFGKey = "docker.cfg"
+	// ConfigDockerCFGKey is the key for the config setting with the path to the
+	// docker client configuration file.
+	ConfigDockerCFGKey = "docker.cfg"
 
-// ConfigProxyLowerKey is the key for the config setting with the lower bound
-// in the range from which an interactive app can be assigned a port.
-const ConfigProxyLowerKey = "proxy.lower"
+	// ConfigProxyLowerKey is the key for the config setting with the lower bound
+	// in the range from which an interactive app can be assigned a port.
+	ConfigProxyLowerKey = "proxy.lower"
 
-// ConfigProxyUpperKey is the key for the config setting with the upper bound
-// in the range from which an interactive app can be assigned a port.
-const ConfigProxyUpperKey = "proxy.upper"
+	// ConfigProxyUpperKey is the key for the config setting with the upper bound
+	// in the range from which an interactive app can be assigned a port.
+	ConfigProxyUpperKey = "proxy.upper"
 
-// ConfigSetfaclPathKey is the key for the config setting with the path to the
-// setfacl executable.
-const ConfigSetfaclPathKey = "setfacl.path"
+	// ConfigSetfaclPathKey is the key for the config setting with the path to the
+	// setfacl executable.
+	ConfigSetfaclPathKey = "setfacl.path"
 
-// ConfigMaxCPUCoresKey is the key for the config setting with the maximum
-// number of cores that a container can use.
-const ConfigMaxCPUCoresKey = "resources.max-cpu-cores"
+	// ConfigMaxCPUCoresKey is the key for the config setting with the maximum
+	// number of cores that a container can use.
+	ConfigMaxCPUCoresKey = "resources.max-cpu-cores"
 
-// ConfigMemoryLimitKey is the key for the config setting with the RAM limit
-// for each container.
-const ConfigMemoryLimitKey = "resources.memory-limit"
+	// ConfigMemoryLimitKey is the key for the config setting with the RAM limit
+	// for each container.
+	ConfigMemoryLimitKey = "resources.memory-limit"
 
-// ConfigFrontendBaseKey is the key for the frontend base URL configuration
-// setting.
-const ConfigFrontendBaseKey = "k8s.frontend.base"
+	// ConfigFrontendBaseKey is the key for the frontend base URL configuration
+	// setting.
+	ConfigFrontendBaseKey = "k8s.frontend.base"
 
-// ConfigAppExposerBaseKey is the key for the app-exposer base URL configuration
-// setting.
-const ConfigAppExposerBaseKey = "k8s.app-exposer.base"
+	// ConfigAppExposerBaseKey is the key for the app-exposer base URL configuration
+	// setting.
+	ConfigAppExposerBaseKey = "k8s.app-exposer.base"
 
-// ConfigHostHeaderKey is the key for the app-exposer Host header configuration
-// setting.
-const ConfigHostHeaderKey = "k8s.app-exposer.host-header"
+	// ConfigHostHeaderKey is the key for the app-exposer Host header configuration
+	// setting.
+	ConfigHostHeaderKey = "k8s.app-exposer.host-header"
 
-// ConfigVaultURLKey is the key for the Vault URL configuration setting.
-const ConfigVaultURLKey = "vault.url"
+	// ConfigVaultURLKey is the key for the Vault URL configuration setting.
+	ConfigVaultURLKey = "vault.url"
 
-// ConfigVaultTokenKey is the key for the Vault token configuration setting.
-const ConfigVaultTokenKey = "vault.token"
+	// ConfigVaultTokenKey is the key for the Vault token configuration setting.
+	ConfigVaultTokenKey = "vault.token"
 
-// ConfigPorklockImageKey is the key for the porklock image configuration
-// setting.
-const ConfigPorklockImageKey = "porklock.image"
+	// ConfigPorklockImageKey is the key for the porklock image configuration
+	// setting.
+	ConfigPorklockImageKey = "porklock.image"
 
-// ConfigPorklockTagKey is the key for the porklock image tag configuration
-// setting.
-const ConfigPorklockTagKey = "porklock.tag"
+	// ConfigPorklockTagKey is the key for the porklock image tag configuration
+	// setting.
+	ConfigPorklockTagKey = "porklock.tag"
 
-// ConfigAMQPURIKey is the key for the AMQP URI configuration setting.
-const ConfigAMQPURIKey = "amqp.uri"
+	// ConfigAMQPURIKey is the key for the AMQP URI configuration setting.
+	ConfigAMQPURIKey = "amqp.uri"
 
-// ConfigAMQPExchangeNameKey is the key for the AMQP Exchange Name configuration
-// setting.
-const ConfigAMQPExchangeNameKey = "amqp.exchange.name"
+	// ConfigAMQPExchangeNameKey is the key for the AMQP Exchange Name configuration
+	// setting.
+	ConfigAMQPExchangeNameKey = "amqp.exchange.name"
 
-// ConfigAMQPExchangeTypeKey is the key for the AMQP Exchange Type configuration
-// setting.
-const ConfigAMQPExchangeTypeKey = "amqp.exchange.type"
+	// ConfigAMQPExchangeTypeKey is the key for the AMQP Exchange Type configuration
+	// setting.
+	ConfigAMQPExchangeTypeKey = "amqp.exchange.type"
+)
 
 var (
 	job              *model.Job

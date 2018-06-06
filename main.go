@@ -117,6 +117,8 @@ func main() {
 		exposerURL  = flag.String("exposer-url", "", "The base URL to the app-exposer service.")
 		exposerHost = flag.String("exposer-host-header", "app-exposer", "The value of the Host header in requests to the app-exposer API.")
 		setfaclPath = flag.String("setfacl-path", "/usr/bin/setfacl", "The path to the setfacl binary")
+		maxCPUCores = flag.Float64("cpus", 0.0, "The default maximum amount of CPU cores that a tool can access.")
+		memoryLimit = flag.Int64("memory-limit", 0, "The default maximum amount of RAM (in bytes) that a tool can access.")
 		err         error
 		cfg         *viper.Viper
 	)
@@ -183,6 +185,8 @@ func main() {
 	cfg.Set("proxy.lower", *proxyLower)
 	cfg.Set("proxy.upper", *proxyUpper)
 	cfg.Set("setfacl.path", *setfaclPath)
+	cfg.Set("resources.max-cpu-cores", *maxCPUCores)
+	cfg.Set("resources.memory-limit", *memoryLimit)
 
 	if cfg.GetString("k8s.frontend.base") == "" {
 		log.Fatal("k8s.frontend.base must be set in the configuration file")
@@ -199,6 +203,22 @@ func main() {
 
 	if *exposerHost != "" {
 		cfg.Set("k8s.app-exposer.host-header", *exposerHost)
+	}
+
+	if *memoryLimit != 0 {
+		cfg.Set("resources.memory-limit", *memoryLimit)
+	} else {
+		if cfg.GetInt64("resources.memory-limit") == 0 {
+			cfg.Set("resources.memory-limit", 4000000000)
+		}
+	}
+
+	if *maxCPUCores != 0.0 {
+		cfg.Set("resources.max-cpu-cores", *maxCPUCores)
+	} else {
+		if cfg.GetFloat64("resources.max-cpu-cores") == 0.0 {
+			cfg.Set("resources.max-cpu-cores", 2.0)
+		}
 	}
 
 	wd, err := os.Getwd()

@@ -19,8 +19,6 @@ import (
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/cyverse-de/configurate"
-	"github.com/cyverse-de/interapps-runner/dcompose"
-	"github.com/cyverse-de/interapps-runner/fs"
 	"github.com/cyverse-de/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -100,7 +98,7 @@ func init() {
 
 // Creates the output upload exclusions file, required by the JobCompose InitFromJob method.
 func createUploadExclusionsFile() {
-	excludeFile, err := os.Create(dcompose.UploadExcludesFilename)
+	excludeFile, err := os.Create(UploadExcludesFilename)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -310,7 +308,7 @@ func main() {
 
 	// Write out the cleanable job JSON to the *writeTo directory. This will be
 	// where network-pruner and image-janitor read the job data from.
-	if err = fs.WriteJob(fs.FS, job.InvocationID, *writeTo, cleanablejson); err != nil {
+	if err = WriteJob(FS, job.InvocationID, *writeTo, cleanablejson); err != nil {
 		log.Fatal(err)
 	}
 
@@ -329,13 +327,13 @@ func main() {
 	// status updates.
 	client.SetupPublishing(amqpExchangeName)
 
-	availablePort, err := dcompose.AvailableTCPPort(*proxyLower, *proxyUpper)
+	availablePort, err := AvailableTCPPort(*proxyLower, *proxyUpper)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Generate the docker-compose file used to execute the job.
-	composer, err := dcompose.New(*logdriver, *pathprefix)
+	composer, err := New(*logdriver, *pathprefix)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -393,7 +391,7 @@ func main() {
 
 	// Clean up the job file. Cleaning it out will prevent image-janitor and
 	// network-pruner from continuously trying to clean up after the job.
-	if err = fs.DeleteJobFile(fs.FS, job.InvocationID, *writeTo); err != nil {
+	if err = DeleteJobFile(FS, job.InvocationID, *writeTo); err != nil {
 		log.Errorf("%+v", err)
 	}
 

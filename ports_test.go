@@ -1,4 +1,4 @@
-package dcompose
+package main
 
 import (
 	"fmt"

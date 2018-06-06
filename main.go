@@ -19,7 +19,6 @@ import (
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/cyverse-de/configurate"
-	"github.com/cyverse-de/interapps-runner/dcompose"
 	"github.com/cyverse-de/interapps-runner/fs"
 	"github.com/cyverse-de/version"
 	"github.com/pkg/errors"
@@ -100,7 +99,7 @@ func init() {
 
 // Creates the output upload exclusions file, required by the JobCompose InitFromJob method.
 func createUploadExclusionsFile() {
-	excludeFile, err := os.Create(dcompose.UploadExcludesFilename)
+	excludeFile, err := os.Create(UploadExcludesFilename)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -329,13 +328,13 @@ func main() {
 	// status updates.
 	client.SetupPublishing(amqpExchangeName)
 
-	availablePort, err := dcompose.AvailableTCPPort(*proxyLower, *proxyUpper)
+	availablePort, err := AvailableTCPPort(*proxyLower, *proxyUpper)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Generate the docker-compose file used to execute the job.
-	composer, err := dcompose.New(*logdriver, *pathprefix)
+	composer, err := New(*logdriver, *pathprefix)
 	if err != nil {
 		log.Fatal(err)
 	}

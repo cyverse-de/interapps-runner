@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cyverse-de/interapps-runner/dcompose"
 	"github.com/cyverse-de/interapps-runner/fs"
 	"github.com/kr/pty"
 	"github.com/pkg/errors"
@@ -70,9 +69,9 @@ func NewJobRunner(client JobUpdatePublisher, job *model.Job, cfg *viper.Viper, e
 		cfg:           cfg,
 		status:        messaging.Success,
 		workingDir:    cwd,
-		volumeDir:     path.Join(cwd, dcompose.VOLUMEDIR),
-		logsDir:       path.Join(cwd, dcompose.VOLUMEDIR, "logs"),
-		tmpDir:        path.Join(cwd, dcompose.TMPDIR),
+		volumeDir:     path.Join(cwd, VOLUMEDIR),
+		logsDir:       path.Join(cwd, VOLUMEDIR, "logs"),
+		tmpDir:        path.Join(cwd, TMPDIR),
 		availablePort: availablePort,
 	}
 	return runner, nil
@@ -139,7 +138,7 @@ func (r *JobRunner) Init(ctx context.Context) error {
 	}
 
 	// Copy upload exclude list to the log dir for debugging purposes.
-	err = fs.CopyFile(fs.FS, dcompose.UploadExcludesFilename, path.Join(r.logsDir, dcompose.UploadExcludesFilename))
+	err = fs.CopyFile(fs.FS, UploadExcludesFilename, path.Join(r.logsDir, UploadExcludesFilename))
 	if err != nil {
 		// Log error and continue.
 		log.Error(err)
@@ -428,14 +427,14 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 		defer proxystderr.Close()
 
 		go func() {
-			if err = r.execDockerCompose(ctx, dcompose.ProxyServiceName(idx), os.Environ(), proxystdout, proxystderr); err != nil {
+			if err = r.execDockerCompose(ctx, ProxyServiceName(idx), os.Environ(), proxystdout, proxystderr); err != nil {
 				running(r.client, r.job, fmt.Sprintf("error running proxy %s", err.Error()))
 			}
 		}()
 
 		exposerURL := r.cfg.GetString(ConfigAppExposerBaseKey)
 		exposerHost := r.cfg.GetString(ConfigHostHeaderKey)
-		ingressID := dcompose.IngressID(r.job.InvocationID, r.job.UserID)
+		ingressID := IngressID(r.job.InvocationID, r.job.UserID)
 
 		log.Printf("creating K8s endpoint %s\n", ingressID)
 		hostIP := GetOutboundIP()

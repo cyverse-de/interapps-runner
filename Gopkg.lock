@@ -9,10 +9,7 @@
 [[projects]]
   branch = "master"
   name = "github.com/cyverse-de/interapps-runner"
-  packages = [
-    "dcompose",
-    "fs"
-  ]
+  packages = ["fs"]
   revision = "d7617fcd11fa2c1d2dbae9ce296c436c5caa75ab"
 
 [[projects]]
@@ -163,6 +160,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "985f20c87e84f2ebe35a369aad4cf8be455664577eb315398184432f4079d156"
+  inputs-digest = "0280b4b1c8deeddead403ca611420189c55c2bc10b9d6c85f6b77ca4237e2071"
   solver-name = "gps-cdcl"
   solver-version = 1

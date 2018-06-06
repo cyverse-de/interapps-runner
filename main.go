@@ -354,7 +354,7 @@ func main() {
 	}
 
 	// Generate the docker-compose file used to execute the job.
-	composer, err := New(*logdriver, *pathprefix)
+	composer, err := NewComposer(job, cfg, *logdriver, *pathprefix)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -364,7 +364,7 @@ func main() {
 
 	// Populates the data structure that will become the docker-compose file with
 	// information from the job definition.
-	composer.InitFromJob(job, cfg, wd, availablePort)
+	composer.InitFromJob(wd, availablePort)
 
 	// Write out the docker-compose file. This will get transferred back with the
 	// job outputs, which makes debugging stuff a lot easier.
@@ -374,7 +374,7 @@ func main() {
 	}
 	defer c.Close()
 
-	m, err := yaml.Marshal(composer)
+	m, err := yaml.Marshal(composer.composition)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -408,7 +408,7 @@ func main() {
 	)
 
 	// Actually execute all of the job steps.
-	exitCode := Run(ctx, client, job, cfg, exit, availablePort)
+	exitCode := Run(ctx, client, composer, exit, availablePort)
 
 	// Clean up the job file. Cleaning it out will prevent image-janitor and
 	// network-pruner from continuously trying to clean up after the job.

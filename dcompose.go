@@ -73,7 +73,7 @@ func FrontendURL(invID, ingressID string, step *model.Step, cfg *viper.Viper) (s
 	if step.Component.Container.InteractiveApps.FrontendURL != "" {
 		unmodifiedURL = step.Component.Container.InteractiveApps.FrontendURL
 	} else {
-		unmodifiedURL = cfg.GetString("k8s.frontend.base")
+		unmodifiedURL = cfg.GetString(ConfigFrontendBaseKey)
 	}
 
 	fURL, err = url.Parse(unmodifiedURL)
@@ -189,8 +189,8 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 	workingVolumeHostPath := path.Join(workingdir, VOLUMEDIR)
 	// The volume containing the local working directory
 
-	porklockImage := cfg.GetString("porklock.image")
-	porklockTag := cfg.GetString("porklock.tag")
+	porklockImage := cfg.GetString(ConfigPorklockImageKey)
+	porklockTag := cfg.GetString(ConfigPorklockTagKey)
 	porklockImageName := fmt.Sprintf("%s:%s", porklockImage, porklockTag)
 
 	for index, dc := range job.DataContainers() {
@@ -418,7 +418,7 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 	if stepContainer.MemoryLimit > 0 {
 		svc.MemLimit = fmt.Sprintf("%db", stepContainer.MemoryLimit)
 	} else {
-		svc.MemLimit = fmt.Sprintf("%db", cfg.GetInt64("resources.memory-limit"))
+		svc.MemLimit = fmt.Sprintf("%db", cfg.GetInt64(ConfigMemoryLimitKey))
 	}
 
 	if stepContainer.CPUShares > 0 {
@@ -434,7 +434,7 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 	if stepContainer.MaxCPUCores > 0.0 {
 		svc.CPUs = fmt.Sprintf("%f", stepContainer.MaxCPUCores)
 	} else {
-		svc.CPUs = fmt.Sprintf("%f", cfg.GetFloat64("resources.max-cpu-cores"))
+		svc.CPUs = fmt.Sprintf("%f", cfg.GetFloat64(ConfigMaxCPUCoresKey))
 	}
 
 	// Handles volumes created by other containers.

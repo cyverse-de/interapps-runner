@@ -79,6 +79,14 @@ const ConfigVaultURLKey = "vault.url"
 // ConfigVaultTokenKey is the key for the Vault token configuration setting.
 const ConfigVaultTokenKey = "vault.token"
 
+// ConfigPorklockImageKey is the key for the porklock image configuration
+// setting.
+const ConfigPorklockImageKey = "porklock.image"
+
+// ConfigPorklockTagKey is the key for the porklock image tag configuration
+// setting.
+const ConfigPorklockTagKey = "porklock.tag"
+
 var (
 	job              *model.Job
 	client           *messaging.Client

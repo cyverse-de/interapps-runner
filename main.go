@@ -408,7 +408,7 @@ func main() {
 	)
 
 	// Actually execute all of the job steps.
-	exitCode := Run(ctx, client, composer, exit, availablePort)
+	exitCode := Run(ctx, client, cfg, composer, exit, availablePort)
 
 	// Clean up the job file. Cleaning it out will prevent image-janitor and
 	// network-pruner from continuously trying to clean up after the job.

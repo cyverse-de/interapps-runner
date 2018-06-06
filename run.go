@@ -17,6 +17,7 @@ import (
 	"github.com/kr/pty"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	"gopkg.in/cyverse-de/messaging.v4"
 	"gopkg.in/cyverse-de/model.v3"
 )
@@ -40,35 +41,49 @@ var logWriter = &logrusProxyWriter{
 
 // JobRunner provides the functionality needed to run jobs.
 type JobRunner struct {
-	client        JobUpdatePublisher
-	exit          chan messaging.StatusCode
-	composer      *Composer
-	status        messaging.StatusCode
-	logsDir       string
-	volumeDir     string
-	workingDir    string
-	projectName   string
-	tmpDir        string
-	networkName   string
-	availablePort int
+	client            JobUpdatePublisher
+	exit              chan messaging.StatusCode
+	composer          *Composer
+	status            messaging.StatusCode
+	logsDir           string
+	volumeDir         string
+	workingDir        string
+	projectName       string
+	tmpDir            string
+	networkName       string
+	availablePort     int
+	dockerPath        string
+	dockerComposePath string
+	vaultURL          string
+	vaultToken        string
+	setfaclPath       string
+	appExposerBaseURL string
+	appExposerHeader  string
 }
 
 // NewJobRunner creates a new JobRunner
-func NewJobRunner(client JobUpdatePublisher, c *Composer, exit chan messaging.StatusCode, availablePort int) (*JobRunner, error) {
+func NewJobRunner(client JobUpdatePublisher, cfg *viper.Viper, c *Composer, exit chan messaging.StatusCode, availablePort int) (*JobRunner, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
 	runner := &JobRunner{
-		client:        client,
-		exit:          exit,
-		composer:      c,
-		status:        messaging.Success,
-		workingDir:    cwd,
-		volumeDir:     path.Join(cwd, VOLUMEDIR),
-		logsDir:       path.Join(cwd, VOLUMEDIR, "logs"),
-		tmpDir:        path.Join(cwd, TMPDIR),
-		availablePort: availablePort,
+		client:            client,
+		exit:              exit,
+		composer:          c,
+		status:            messaging.Success,
+		workingDir:        cwd,
+		volumeDir:         path.Join(cwd, VOLUMEDIR),
+		logsDir:           path.Join(cwd, VOLUMEDIR, "logs"),
+		tmpDir:            path.Join(cwd, TMPDIR),
+		availablePort:     availablePort,
+		dockerPath:        cfg.GetString(ConfigDockerPathKey),
+		dockerComposePath: cfg.GetString(ConfigDockerComposePathKey),
+		vaultURL:          cfg.GetString(ConfigVaultURLKey),
+		vaultToken:        cfg.GetString(ConfigVaultTokenKey),
+		setfaclPath:       cfg.GetString(ConfigSetfaclPathKey),
+		appExposerBaseURL: cfg.GetString(ConfigAppExposerBaseKey),
+		appExposerHeader:  cfg.GetString(ConfigHostHeaderKey),
 	}
 	return runner, nil
 }
@@ -162,7 +177,7 @@ func (r *JobRunner) Init(ctx context.Context) error {
 // DockerLogin will run "docker login" with credentials sent with the job.
 func (r *JobRunner) DockerLogin() error {
 	var err error
-	dockerBin := r.composer.cfg.GetString(ConfigDockerPathKey)
+
 	// Login so that images can be pulled.
 	var authinfo *authInfo
 	for _, img := range r.composer.job.ContainerImages() {
@@ -172,7 +187,7 @@ func (r *JobRunner) DockerLogin() error {
 				return err
 			}
 			authCommand := exec.Command(
-				dockerBin,
+				r.dockerPath,
 				"login",
 				"--username",
 				authinfo.Username,
@@ -204,10 +219,9 @@ type JobUpdatePublisher interface {
 
 func (r *JobRunner) execDockerCompose(ctx context.Context, svcname string, env []string, stdout, stderr io.Writer) error {
 	var err error
-	composePath := r.composer.cfg.GetString(ConfigDockerComposePathKey)
 	cmd := exec.CommandContext(
 		ctx,
-		composePath,
+		r.dockerComposePath,
 		"-p",
 		r.projectName,
 		"-f",
@@ -254,8 +268,8 @@ func (r *JobRunner) downloadInputs(ctx context.Context) (messaging.StatusCode, e
 	var exitCode int64
 
 	env := os.Environ()
-	env = append(env, fmt.Sprintf("VAULT_ADDR=%s", r.composer.cfg.GetString(ConfigVaultURLKey)))
-	env = append(env, fmt.Sprintf("VAULT_TOKEN=%s", r.composer.cfg.GetString(ConfigVaultTokenKey)))
+	env = append(env, fmt.Sprintf("VAULT_ADDR=%s", r.vaultURL))
+	env = append(env, fmt.Sprintf("VAULT_TOKEN=%s", r.vaultToken))
 
 	for index, input := range r.composer.job.Inputs() {
 		running(r.client, r.composer.job, fmt.Sprintf("Downloading %s", input.IRODSPath()))
@@ -289,8 +303,7 @@ func (r *JobRunner) downloadInputs(ctx context.Context) (messaging.StatusCode, e
 
 // ImageUser returns the UID of the image's default user, or 0 if it's not set.
 func (r *JobRunner) ImageUser(ctx context.Context, image string) (int, error) {
-	dockerPath := r.composer.cfg.GetString(ConfigDockerPathKey)
-	out, err := exec.CommandContext(ctx, dockerPath, "image", "inspect", "-f", "{{.Config.User}}", image).Output()
+	out, err := exec.CommandContext(ctx, r.dockerPath, "image", "inspect", "-f", "{{.Config.User}}", image).Output()
 	if err != nil {
 		return -1, err
 	}
@@ -306,8 +319,7 @@ func (r *JobRunner) ImageUser(ctx context.Context, image string) (int, error) {
 // rwx perms recursively. It is not a default ACL.
 func (r *JobRunner) AddWorkingVolumeACL(ctx context.Context, uid int) error {
 	log.Printf("adding rwx acl on %s recursively for uid %d", r.volumeDir, uid)
-	setfaclPath := r.composer.cfg.GetString(ConfigSetfaclPathKey)
-	cmd := exec.CommandContext(ctx, setfaclPath, "-R", "-m", fmt.Sprintf("d:u:%d:rwx", uid), r.volumeDir)
+	cmd := exec.CommandContext(ctx, r.setfaclPath, "-R", "-m", fmt.Sprintf("d:u:%d:rwx", uid), r.volumeDir)
 	cmd.Env = os.Environ()
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
@@ -318,8 +330,7 @@ func (r *JobRunner) AddWorkingVolumeACL(ctx context.Context, uid int) error {
 // directory that gets mounted into each container that runs as part of the job.
 func (r *JobRunner) RemoveWorkingVolumeACL(ctx context.Context, uid int) error {
 	log.Printf("removing rwx acl on %s recursively for uid %d", r.volumeDir, uid)
-	setfaclPath := r.composer.cfg.GetString(ConfigSetfaclPathKey)
-	cmd := exec.CommandContext(ctx, setfaclPath, "-R", "-x", fmt.Sprintf("u:%d", uid), r.volumeDir)
+	cmd := exec.CommandContext(ctx, r.setfaclPath, "-R", "-x", fmt.Sprintf("u:%d", uid), r.volumeDir)
 	cmd.Env = os.Environ()
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
@@ -428,8 +439,6 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 			}
 		}()
 
-		exposerURL := r.composer.cfg.GetString(ConfigAppExposerBaseKey)
-		exposerHost := r.composer.cfg.GetString(ConfigHostHeaderKey)
 		ingressID := r.composer.IngressID()
 
 		log.Printf("creating K8s endpoint %s\n", ingressID)
@@ -439,9 +448,9 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 			Name: ingressID,
 			Port: r.availablePort,
 		}
-		if err = CreateK8SEndpoint(exposerURL, exposerHost, eptcfg); err != nil {
+		if err = CreateK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, eptcfg); err != nil {
 			running(r.client, r.composer.job, fmt.Sprintf("Error creating K8s Endpoint: %s", err.Error()))
-			DeleteK8SEndpoint(exposerURL, exposerHost, ingressID)
+			DeleteK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, ingressID)
 			return messaging.StatusStepFailed, err
 		}
 		log.Printf("done creating K8s endpoint %s\n", ingressID)
@@ -452,10 +461,10 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 			Name:       ingressID,
 			ListenPort: 80,
 		}
-		if err = CreateK8SService(exposerURL, exposerHost, svccfg); err != nil {
+		if err = CreateK8SService(r.appExposerBaseURL, r.appExposerHeader, svccfg); err != nil {
 			running(r.client, r.composer.job, fmt.Sprintf("Error creating K8s Service: %s", err.Error()))
-			DeleteK8SService(exposerURL, exposerHost, ingressID)
-			DeleteK8SEndpoint(exposerURL, exposerHost, ingressID)
+			DeleteK8SService(r.appExposerBaseURL, r.appExposerHeader, ingressID)
+			DeleteK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, ingressID)
 			return messaging.StatusStepFailed, err
 		}
 		log.Printf("done creating K8s service %s\n", ingressID)
@@ -466,11 +475,11 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 			Port:    80,
 			Name:    ingressID,
 		}
-		if err = CreateK8SIngress(exposerURL, exposerHost, ingcfg); err != nil {
+		if err = CreateK8SIngress(r.appExposerBaseURL, r.appExposerHeader, ingcfg); err != nil {
 			running(r.client, r.composer.job, fmt.Sprintf("Error creating K8s Ingress: %s", err.Error()))
-			DeleteK8SIngress(exposerURL, exposerHost, ingressID)
-			DeleteK8SService(exposerURL, exposerHost, ingressID)
-			DeleteK8SEndpoint(exposerURL, exposerHost, ingressID)
+			DeleteK8SIngress(r.appExposerBaseURL, r.appExposerHeader, ingressID)
+			DeleteK8SService(r.appExposerBaseURL, r.appExposerHeader, ingressID)
+			DeleteK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, ingressID)
 			return messaging.StatusStepFailed, err
 		}
 		log.Printf("done creating K8s ingress %s\n", ingressID)
@@ -503,19 +512,19 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 		// right thing to do, but it's easy to fix if it becomes a problem. Just
 		// return messaging.StatusStepFailed and the error.
 		log.Printf("deleting K8s endpoint %s\n", ingressID)
-		if err = DeleteK8SEndpoint(exposerURL, exposerHost, ingressID); err != nil {
+		if err = DeleteK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, ingressID); err != nil {
 			running(r.client, r.composer.job, fmt.Sprintf("Error deleting K8s endpoint: %s", err.Error()))
 		}
 		log.Printf("done deleting K8s endpoint %s\n", ingressID)
 
 		log.Printf("deleting K8s service %s\n", ingressID)
-		if err = DeleteK8SService(exposerURL, exposerHost, ingressID); err != nil {
+		if err = DeleteK8SService(r.appExposerBaseURL, r.appExposerHeader, ingressID); err != nil {
 			running(r.client, r.composer.job, fmt.Sprintf("Error deleting K8s service: %s", err.Error()))
 		}
 		log.Printf("done deleting K8s service %s\n", ingressID)
 
 		log.Printf("deleting K8s ingress %s\n", ingressID)
-		if err = DeleteK8SIngress(exposerURL, exposerHost, ingressID); err != nil {
+		if err = DeleteK8SIngress(r.appExposerBaseURL, r.appExposerHeader, ingressID); err != nil {
 			running(r.client, r.composer.job, fmt.Sprintf("Error deleting K8s ingress: %s", err.Error()))
 		}
 		log.Printf("done deleting K8s ingress %s\n", ingressID)
@@ -544,8 +553,8 @@ func (r *JobRunner) uploadOutputs() (messaging.StatusCode, error) {
 	defer stderr.Close()
 
 	env := []string{
-		fmt.Sprintf("VAULT_ADDR=%s", r.composer.cfg.GetString(ConfigVaultURLKey)),
-		fmt.Sprintf("VAULT_TOKEN=%s", r.composer.cfg.GetString(ConfigVaultTokenKey)),
+		fmt.Sprintf("VAULT_ADDR=%s", r.vaultURL),
+		fmt.Sprintf("VAULT_TOKEN=%s", r.vaultToken),
 	}
 
 	// We're using the background context so that this stuff will run even when
@@ -645,14 +654,14 @@ func (r *JobRunner) dockerComposePull(ctx context.Context, composePath string) e
 }
 
 // Run executes the job, and returns the exit code on the exit channel.
-func Run(ctx context.Context, client JobUpdatePublisher, c *Composer, exit chan messaging.StatusCode, availablePort int) messaging.StatusCode {
+func Run(ctx context.Context, client JobUpdatePublisher, cfg *viper.Viper, c *Composer, exit chan messaging.StatusCode, availablePort int) messaging.StatusCode {
 	host, err := os.Hostname()
 	if err != nil {
 		log.Error(err)
 		host = "UNKNOWN"
 	}
 
-	runner, err := NewJobRunner(client, c, exit, availablePort)
+	runner, err := NewJobRunner(client, cfg, c, exit, availablePort)
 	if err != nil {
 		log.Error(err)
 	}
@@ -664,8 +673,6 @@ func Run(ctx context.Context, client JobUpdatePublisher, c *Composer, exit chan 
 
 	runner.projectName = strings.Replace(runner.composer.job.InvocationID, "-", "", -1)
 	runner.networkName = fmt.Sprintf("%s_default", runner.projectName)
-	dockerPath := runner.composer.cfg.GetString(ConfigDockerPathKey)
-	composePath := runner.composer.cfg.GetString(ConfigDockerComposePathKey)
 
 	// let everyone know the job is running
 	running(runner.client, runner.composer.job, fmt.Sprintf("Job %s is running on host %s", runner.composer.job.InvocationID, host))
@@ -674,11 +681,11 @@ func Run(ctx context.Context, client JobUpdatePublisher, c *Composer, exit chan 
 		log.Error(err)
 	}
 
-	if err = runner.createNetwork(ctx, dockerPath, runner.networkName); err != nil {
+	if err = runner.createNetwork(ctx, runner.dockerPath, runner.networkName); err != nil {
 		log.Error(err) // don't need to fail, since docker-compose is *supposed* to create the network
 	}
 
-	if err = runner.dockerComposePull(ctx, composePath); err != nil {
+	if err = runner.dockerComposePull(ctx, runner.dockerComposePath); err != nil {
 		log.Error(err)
 		runner.status = messaging.StatusDockerPullFailed
 	}
@@ -733,14 +740,14 @@ func Run(ctx context.Context, client JobUpdatePublisher, c *Composer, exit chan 
 	}
 
 	// Clean up, you filthy animal
-	downCommand := exec.Command(composePath, "-p", runner.projectName, "-f", "docker-compose.yml", "down", "-v")
+	downCommand := exec.Command(runner.dockerComposePath, "-p", runner.projectName, "-f", "docker-compose.yml", "down", "-v")
 	downCommand.Stderr = log.Writer()
 	downCommand.Stdout = log.Writer()
 	if err = downCommand.Run(); err != nil {
 		log.Errorf("%+v\n", err)
 	}
 
-	netCmd := exec.Command(dockerPath, "network", "rm", fmt.Sprintf("%s_default", runner.projectName))
+	netCmd := exec.Command(runner.dockerPath, "network", "rm", fmt.Sprintf("%s_default", runner.projectName))
 	netCmd.Stderr = log.Writer()
 	netCmd.Stdout = log.Writer()
 	if err = netCmd.Run(); err != nil {

@@ -89,7 +89,6 @@ func NewJobComposition(ld string, pathprefix string) (*JobComposition, error) {
 // Composer orchestrates the creation of the docker-compose file for a job.
 type Composer struct {
 	job             *model.Job
-	cfg             *viper.Viper
 	composition     *JobComposition
 	ingressID       string // This shouldn't be accessed directly. Use IngressID().
 	porklockImage   string
@@ -107,7 +106,6 @@ func NewComposer(job *model.Job, cfg *viper.Viper, logDriver, pathPrefix string)
 	}
 	return &Composer{
 		job:             job,
-		cfg:             cfg,
 		composition:     c,
 		porklockImage:   cfg.GetString(ConfigPorklockImageKey),
 		porklockTag:     cfg.GetString(ConfigPorklockTagKey),

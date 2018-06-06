@@ -31,6 +31,56 @@ import (
 	"github.com/spf13/viper"
 )
 
+// ConfigDockerComposePathKey is the key for the config setting with the path
+// to the docker-compose executable.
+const ConfigDockerComposePathKey = "docker-compose.path"
+
+// ConfigDockerPathKey is the key for the config setting with the path to the
+// docker executable.
+const ConfigDockerPathKey = "docker.path"
+
+// ConfigDockerCFGKey is the key for the config setting with the path to the
+// docker client configuration file.
+const ConfigDockerCFGKey = "docker.cfg"
+
+// ConfigProxyLowerKey is the key for the config setting with the lower bound
+// in the range from which an interactive app can be assigned a port.
+const ConfigProxyLowerKey = "proxy.lower"
+
+// ConfigProxyUpperKey is the key for the config setting with the upper bound
+// in the range from which an interactive app can be assigned a port.
+const ConfigProxyUpperKey = "proxy.upper"
+
+// ConfigSetfaclPathKey is the key for the config setting with the path to the
+// setfacl executable.
+const ConfigSetfaclPathKey = "setfacl.path"
+
+// ConfigMaxCPUCoresKey is the key for the config setting with the maximum
+// number of cores that a container can use.
+const ConfigMaxCPUCoresKey = "resources.max-cpu-cores"
+
+// ConfigMemoryLimitKey is the key for the config setting with the RAM limit
+// for each container.
+const ConfigMemoryLimitKey = "resources.memory-limit"
+
+// ConfigFrontendBaseKey is the key for the frontend base URL configuration
+// setting.
+const ConfigFrontendBaseKey = "k8s.frontend.base"
+
+// ConfigAppExposerBaseKey is the key for the app-exposer base URL configuration
+// setting.
+const ConfigAppExposerBaseKey = "k8s.app-exposer.base"
+
+// ConfigHostHeaderKey is the key for the app-exposer Host header configuration
+// setting.
+const ConfigHostHeaderKey = "k8s.app-exposer.host-header"
+
+// ConfigVaultURLKey is the key for the Vault URL configuration setting.
+const ConfigVaultURLKey = "vault.url"
+
+// ConfigVaultTokenKey is the key for the Vault token configuration setting.
+const ConfigVaultTokenKey = "vault.token"
+
 var (
 	job              *model.Job
 	client           *messaging.Client
@@ -179,45 +229,45 @@ func main() {
 		log.Fatal("--job must be set.")
 	}
 
-	cfg.Set("docker-compose.path", *composeBin)
-	cfg.Set("docker.path", *dockerBin)
-	cfg.Set("docker.cfg", *dockerCfg)
-	cfg.Set("proxy.lower", *proxyLower)
-	cfg.Set("proxy.upper", *proxyUpper)
-	cfg.Set("setfacl.path", *setfaclPath)
-	cfg.Set("resources.max-cpu-cores", *maxCPUCores)
-	cfg.Set("resources.memory-limit", *memoryLimit)
+	cfg.Set(ConfigDockerComposePathKey, *composeBin)
+	cfg.Set(ConfigDockerPathKey, *dockerBin)
+	cfg.Set(ConfigDockerCFGKey, *dockerCfg)
+	cfg.Set(ConfigProxyLowerKey, *proxyLower)
+	cfg.Set(ConfigProxyUpperKey, *proxyUpper)
+	cfg.Set(ConfigSetfaclPathKey, *setfaclPath)
+	cfg.Set(ConfigMaxCPUCoresKey, *maxCPUCores)
+	cfg.Set(ConfigMemoryLimitKey, *memoryLimit)
 
-	if cfg.GetString("k8s.frontend.base") == "" {
-		log.Fatal("k8s.frontend.base must be set in the configuration file")
+	if cfg.GetString(ConfigFrontendBaseKey) == "" {
+		log.Fatalf("%s must be set in the configuration file", ConfigFrontendBaseKey)
 	}
 
-	if cfg.GetString("k8s.app-exposer.base") == "" && *exposerURL == "" {
+	if cfg.GetString(ConfigAppExposerBaseKey) == "" && *exposerURL == "" {
 		log.Fatal("the exposer url must be set either in the config file or with --exposer-url")
 	}
 
 	// prefer the command-line setting over the config setting.
 	if *exposerURL != "" {
-		cfg.Set("k8s.app-exposer.base", *exposerURL)
+		cfg.Set(ConfigAppExposerBaseKey, *exposerURL)
 	}
 
 	if *exposerHost != "" {
-		cfg.Set("k8s.app-exposer.host-header", *exposerHost)
+		cfg.Set(ConfigHostHeaderKey, *exposerHost)
 	}
 
 	if *memoryLimit != 0 {
-		cfg.Set("resources.memory-limit", *memoryLimit)
+		cfg.Set(ConfigMemoryLimitKey, *memoryLimit)
 	} else {
-		if cfg.GetInt64("resources.memory-limit") == 0 {
-			cfg.Set("resources.memory-limit", 4000000000)
+		if cfg.GetInt64(ConfigMemoryLimitKey) == 0 {
+			cfg.Set(ConfigMemoryLimitKey, 4000000000)
 		}
 	}
 
 	if *maxCPUCores != 0.0 {
-		cfg.Set("resources.max-cpu-cores", *maxCPUCores)
+		cfg.Set(ConfigMaxCPUCoresKey, *maxCPUCores)
 	} else {
-		if cfg.GetFloat64("resources.max-cpu-cores") == 0.0 {
-			cfg.Set("resources.max-cpu-cores", 2.0)
+		if cfg.GetFloat64(ConfigMaxCPUCoresKey) == 0.0 {
+			cfg.Set(ConfigMaxCPUCoresKey, 2.0)
 		}
 	}
 

@@ -167,7 +167,7 @@ func (r *JobRunner) Init(ctx context.Context) error {
 // DockerLogin will run "docker login" with credentials sent with the job.
 func (r *JobRunner) DockerLogin() error {
 	var err error
-	dockerBin := r.cfg.GetString("docker.path")
+	dockerBin := r.cfg.GetString(ConfigDockerPathKey)
 	// Login so that images can be pulled.
 	var authinfo *authInfo
 	for _, img := range r.job.ContainerImages() {
@@ -209,7 +209,7 @@ type JobUpdatePublisher interface {
 
 func (r *JobRunner) execDockerCompose(ctx context.Context, svcname string, env []string, stdout, stderr io.Writer) error {
 	var err error
-	composePath := r.cfg.GetString("docker-compose.path")
+	composePath := r.cfg.GetString(ConfigDockerComposePathKey)
 	cmd := exec.CommandContext(
 		ctx,
 		composePath,
@@ -259,8 +259,8 @@ func (r *JobRunner) downloadInputs(ctx context.Context) (messaging.StatusCode, e
 	var exitCode int64
 
 	env := os.Environ()
-	env = append(env, fmt.Sprintf("VAULT_ADDR=%s", r.cfg.GetString("vault.url")))
-	env = append(env, fmt.Sprintf("VAULT_TOKEN=%s", r.cfg.GetString("vault.token")))
+	env = append(env, fmt.Sprintf("VAULT_ADDR=%s", r.cfg.GetString(ConfigVaultURLKey)))
+	env = append(env, fmt.Sprintf("VAULT_TOKEN=%s", r.cfg.GetString(ConfigVaultTokenKey)))
 
 	for index, input := range r.job.Inputs() {
 		running(r.client, r.job, fmt.Sprintf("Downloading %s", input.IRODSPath()))
@@ -294,7 +294,7 @@ func (r *JobRunner) downloadInputs(ctx context.Context) (messaging.StatusCode, e
 
 // ImageUser returns the UID of the image's default user, or 0 if it's not set.
 func (r *JobRunner) ImageUser(ctx context.Context, image string) (int, error) {
-	dockerPath := r.cfg.GetString("docker.path")
+	dockerPath := r.cfg.GetString(ConfigDockerPathKey)
 	out, err := exec.CommandContext(ctx, dockerPath, "image", "inspect", "-f", "{{.Config.User}}", image).Output()
 	if err != nil {
 		return -1, err
@@ -311,7 +311,7 @@ func (r *JobRunner) ImageUser(ctx context.Context, image string) (int, error) {
 // rwx perms recursively. It is not a default ACL.
 func (r *JobRunner) AddWorkingVolumeACL(ctx context.Context, uid int) error {
 	log.Printf("adding rwx acl on %s recursively for uid %d", r.volumeDir, uid)
-	setfaclPath := r.cfg.GetString("setfacl.path")
+	setfaclPath := r.cfg.GetString(ConfigSetfaclPathKey)
 	cmd := exec.CommandContext(ctx, setfaclPath, "-R", "-m", fmt.Sprintf("d:u:%d:rwx", uid), r.volumeDir)
 	cmd.Env = os.Environ()
 	cmd.Stdout = logWriter
@@ -323,7 +323,7 @@ func (r *JobRunner) AddWorkingVolumeACL(ctx context.Context, uid int) error {
 // directory that gets mounted into each container that runs as part of the job.
 func (r *JobRunner) RemoveWorkingVolumeACL(ctx context.Context, uid int) error {
 	log.Printf("removing rwx acl on %s recursively for uid %d", r.volumeDir, uid)
-	setfaclPath := r.cfg.GetString("setfacl.path")
+	setfaclPath := r.cfg.GetString(ConfigSetfaclPathKey)
 	cmd := exec.CommandContext(ctx, setfaclPath, "-R", "-x", fmt.Sprintf("u:%d", uid), r.volumeDir)
 	cmd.Env = os.Environ()
 	cmd.Stdout = logWriter
@@ -433,8 +433,8 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 			}
 		}()
 
-		exposerURL := r.cfg.GetString("k8s.app-exposer.base")
-		exposerHost := r.cfg.GetString("k8s.app-exposer.host-header")
+		exposerURL := r.cfg.GetString(ConfigAppExposerBaseKey)
+		exposerHost := r.cfg.GetString(ConfigHostHeaderKey)
 		ingressID := dcompose.IngressID(r.job.InvocationID, r.job.UserID)
 
 		log.Printf("creating K8s endpoint %s\n", ingressID)
@@ -549,8 +549,8 @@ func (r *JobRunner) uploadOutputs() (messaging.StatusCode, error) {
 	defer stderr.Close()
 
 	env := []string{
-		fmt.Sprintf("VAULT_ADDR=%s", r.cfg.GetString("vault.url")),
-		fmt.Sprintf("VAULT_TOKEN=%s", r.cfg.GetString("vault.token")),
+		fmt.Sprintf("VAULT_ADDR=%s", r.cfg.GetString(ConfigVaultURLKey)),
+		fmt.Sprintf("VAULT_TOKEN=%s", r.cfg.GetString(ConfigVaultTokenKey)),
 	}
 
 	// We're using the background context so that this stuff will run even when
@@ -669,8 +669,8 @@ func Run(ctx context.Context, client JobUpdatePublisher, job *model.Job, cfg *vi
 
 	runner.projectName = strings.Replace(runner.job.InvocationID, "-", "", -1)
 	runner.networkName = fmt.Sprintf("%s_default", runner.projectName)
-	dockerPath := runner.cfg.GetString("docker.path")
-	composePath := runner.cfg.GetString("docker-compose.path")
+	dockerPath := runner.cfg.GetString(ConfigDockerPathKey)
+	composePath := runner.cfg.GetString(ConfigDockerComposePathKey)
 
 	// let everyone know the job is running
 	running(runner.client, runner.job, fmt.Sprintf("Job %s is running on host %s", runner.job.InvocationID, host))

@@ -159,7 +159,7 @@ services:
     working_dir: /working_dir
 `
 
-	jc := &JobCompose{}
+	jc := &JobComposition{}
 	err := yaml.Unmarshal([]byte(expected), &jc)
 	if err != nil {
 		t.Error(err)
@@ -335,13 +335,13 @@ services:
 	}
 }
 
-func TestNew(t *testing.T) {
-	jc, err := New("", "")
+func TestNewJobComposition(t *testing.T) {
+	jc, err := NewJobComposition("", "")
 	if err != nil {
 		t.Error(err)
 	}
 	if jc == nil {
-		t.Error("New() returned nil")
+		t.Error("NewJobComposition() returned nil")
 	}
 	if jc.Version != "2.2" {
 		t.Errorf("version was %s", jc.Version)
@@ -349,16 +349,16 @@ func TestNew(t *testing.T) {
 }
 
 func TestConvertStep(t *testing.T) {
-	jc, err := New("", "")
-	if err != nil {
-		t.Error(err)
-	}
 	cfg := viper.New()
 	cfg.Set("k8s.frontend.base", "http://cyverse.run/")
 
+	jc, err := NewComposer(testJob, cfg, "", "")
+	if err != nil {
+		t.Error(err)
+	}
+
 	stepcfg := &ConvertStepParams{
 		Step:               &testJob.Steps[0],
-		Cfg:                cfg,
 		Index:              0,
 		User:               testJob.Submitter,
 		InvID:              testJob.InvocationID,
@@ -367,14 +367,14 @@ func TestConvertStep(t *testing.T) {
 	}
 
 	jc.ConvertStep(stepcfg)
-	if len(jc.Services) != 2 {
-		t.Errorf("number of services was %d and not 1", len(jc.Services))
+	if len(jc.composition.Services) != 2 {
+		t.Errorf("number of services was %d and not 1", len(jc.composition.Services))
 	}
-	if _, ok := jc.Services["step_0"]; !ok {
+	if _, ok := jc.composition.Services["step_0"]; !ok {
 		t.Error("step_0 not found")
 	}
 
-	svc := jc.Services["step_0"]
+	svc := jc.composition.Services["step_0"]
 
 	if _, ok := svc.Environment["FOO"]; !ok {
 		t.Error("environment var FOO not found")

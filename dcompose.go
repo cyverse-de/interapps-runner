@@ -56,14 +56,76 @@ var (
 	hostworkingdir string
 )
 
+// JobComposition is the top-level type for what will become a job's docker-compose
+// file.
+type JobComposition struct {
+	Version  string `yaml:"version"`
+	Volumes  map[string]*Volume
+	Networks map[string]*Network `yaml:",omitempty"`
+	Services map[string]*Service
+}
+
+// NewJobComposition returns a newly instantiated *JobComposition instance.
+func NewJobComposition(ld string, pathprefix string) (*JobComposition, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get host working directory")
+	}
+
+	logdriver = ld
+	hostworkingdir = strings.TrimPrefix(wd, pathprefix)
+	if strings.HasPrefix(hostworkingdir, "/") {
+		hostworkingdir = strings.TrimPrefix(hostworkingdir, "/")
+	}
+
+	return &JobComposition{
+		Version:  "2.2",
+		Volumes:  make(map[string]*Volume),
+		Networks: make(map[string]*Network),
+		Services: make(map[string]*Service),
+	}, nil
+}
+
+// Composer orchestrates the creation of the docker-compose file for a job.
+type Composer struct {
+	job             *model.Job
+	composition     *JobComposition
+	ingressID       string // This shouldn't be accessed directly. Use IngressID().
+	porklockImage   string
+	porklockTag     string
+	memoryLimit     int64
+	maxCPUCores     float64
+	frontendBaseURL string
+}
+
+// NewComposer returns a new *Composer.
+func NewComposer(job *model.Job, cfg *viper.Viper, logDriver, pathPrefix string) (*Composer, error) {
+	c, err := NewJobComposition(logDriver, pathPrefix)
+	if err != nil {
+		return nil, err
+	}
+	return &Composer{
+		job:             job,
+		composition:     c,
+		porklockImage:   cfg.GetString(ConfigPorklockImageKey),
+		porklockTag:     cfg.GetString(ConfigPorklockTagKey),
+		memoryLimit:     cfg.GetInt64(ConfigMemoryLimitKey),
+		maxCPUCores:     cfg.GetFloat64(ConfigMaxCPUCoresKey),
+		frontendBaseURL: cfg.GetString(ConfigFrontendBaseKey),
+	}, nil
+}
+
 // IngressID returns the name/identifier for the ingress in k8s.
-func IngressID(invocationID, userID string) string {
-	return fmt.Sprintf("a%x", sha256.Sum256([]byte(fmt.Sprintf("%s%s", userID, invocationID))))[0:9]
+func (c *Composer) IngressID() string {
+	if c.ingressID == "" {
+		c.ingressID = fmt.Sprintf("a%x", sha256.Sum256([]byte(fmt.Sprintf("%s%s", c.job.UserID, c.job.InvocationID))))[0:9]
+	}
+	return c.ingressID
 }
 
 // FrontendURL generates the full URL to to the running app, as shown to the
 // user and accessed through a browser.
-func FrontendURL(invID, ingressID string, step *model.Step, cfg *viper.Viper) (string, error) {
+func (c *Composer) FrontendURL(step *model.Step) (string, error) {
 	var (
 		unmodifiedURL string
 		fURL          *url.URL
@@ -73,7 +135,7 @@ func FrontendURL(invID, ingressID string, step *model.Step, cfg *viper.Viper) (s
 	if step.Component.Container.InteractiveApps.FrontendURL != "" {
 		unmodifiedURL = step.Component.Container.InteractiveApps.FrontendURL
 	} else {
-		unmodifiedURL = cfg.GetString(ConfigFrontendBaseKey)
+		unmodifiedURL = c.frontendBaseURL
 	}
 
 	fURL, err = url.Parse(unmodifiedURL)
@@ -82,7 +144,7 @@ func FrontendURL(invID, ingressID string, step *model.Step, cfg *viper.Viper) (s
 	}
 
 	fURLPort := fURL.Port()
-	fURLHost := fmt.Sprintf("%s.%s", ingressID, fURL.Hostname())
+	fURLHost := fmt.Sprintf("%s.%s", c.IngressID(), fURL.Hostname())
 
 	if fURLPort != "" {
 		fURL.Host = fmt.Sprintf("%s:%s", fURLHost, fURLPort)
@@ -151,51 +213,19 @@ type Service struct {
 	WorkingDir    string                           `yaml:"working_dir,omitempty"`
 }
 
-// JobCompose is the top-level type for what will become a job's docker-compose
-// file.
-type JobCompose struct {
-	Version  string `yaml:"version"`
-	Volumes  map[string]*Volume
-	Networks map[string]*Network `yaml:",omitempty"`
-	Services map[string]*Service
-}
-
-// New returns a newly instantiated *JobCompose instance.
-func New(ld string, pathprefix string) (*JobCompose, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get host working directory")
-	}
-
-	logdriver = ld
-	hostworkingdir = strings.TrimPrefix(wd, pathprefix)
-	if strings.HasPrefix(hostworkingdir, "/") {
-		hostworkingdir = strings.TrimPrefix(hostworkingdir, "/")
-	}
-
-	return &JobCompose{
-		Version:  "2.2",
-		Volumes:  make(map[string]*Volume),
-		Networks: make(map[string]*Network),
-		Services: make(map[string]*Service),
-	}, nil
-}
-
 // InitFromJob fills out values as appropriate for running in the DE's Condor
 // Cluster.
-func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir string, availablePort int) error {
+func (c *Composer) InitFromJob(workingdir string, availablePort int) error {
 	var err error
 
 	workingVolumeHostPath := path.Join(workingdir, VOLUMEDIR)
 	// The volume containing the local working directory
 
-	porklockImage := cfg.GetString(ConfigPorklockImageKey)
-	porklockTag := cfg.GetString(ConfigPorklockTagKey)
-	porklockImageName := fmt.Sprintf("%s:%s", porklockImage, porklockTag)
+	porklockImageName := fmt.Sprintf("%s:%s", c.porklockImage, c.porklockTag)
 
 	for index, dc := range job.DataContainers() {
 		svcKey := fmt.Sprintf("data_%d", index)
-		j.Services[svcKey] = &Service{
+		c.composition.Services[svcKey] = &Service{
 			Image:         fmt.Sprintf("%s:%s", dc.Name, dc.Tag),
 			ContainerName: fmt.Sprintf("%s-%s", dc.NamePrefix, job.InvocationID),
 			EntryPoint:    "/bin/true",
@@ -205,7 +235,7 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 			},
 		}
 
-		svc := j.Services[svcKey]
+		svc := c.composition.Services[svcKey]
 		if dc.HostPath != "" || dc.ContainerPath != "" {
 			var rw string
 			if dc.ReadOnly {
@@ -220,7 +250,7 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 	}
 
 	for index, input := range job.Inputs() {
-		j.Services[fmt.Sprintf("input_%d", index)] = &Service{
+		c.composition.Services[fmt.Sprintf("input_%d", index)] = &Service{
 			CapAdd:  []string{"IPC_LOCK"},
 			Image:   porklockImageName,
 			Command: input.Arguments(job.Submitter, job.FileMetadata),
@@ -243,7 +273,6 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 	for index, step := range job.Steps {
 		stepcfg := &ConvertStepParams{
 			Step:               &step,
-			Cfg:                cfg,
 			Index:              index,
 			User:               job.Submitter,
 			UserID:             job.UserID,
@@ -251,7 +280,7 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 			WorkingDirHostPath: workingVolumeHostPath,
 			AvailablePort:      availablePort,
 		}
-		if err = j.ConvertStep(stepcfg); err != nil {
+		if err = c.ConvertStep(stepcfg); err != nil {
 			return err
 		}
 	}
@@ -260,7 +289,7 @@ func (j *JobCompose) InitFromJob(job *model.Job, cfg *viper.Viper, workingdir st
 	excludesPath := path.Join(workingdir, UploadExcludesFilename)
 	excludesMount := path.Join(CONFIGDIR, UploadExcludesFilename)
 
-	j.Services["upload_outputs"] = &Service{
+	c.composition.Services["upload_outputs"] = &Service{
 		CapAdd:  []string{"IPC_LOCK"},
 		Image:   porklockImageName,
 		Command: job.FinalOutputArguments(excludesMount),
@@ -325,7 +354,6 @@ func websocketURL(step *model.Step, backendURL string) (string, error) {
 // ConvertStepParams contains the info needed to call ConvertStep()
 type ConvertStepParams struct {
 	Step               *model.Step
-	Cfg                *viper.Viper
 	Index              int
 	User               string
 	UserID             string
@@ -334,18 +362,15 @@ type ConvertStepParams struct {
 	AvailablePort      int
 }
 
-// ConvertStep will add the job step to the JobCompose services along with a
+// ConvertStep will add the job step to the JobComposition services along with a
 // proxy service.
-func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
+func (c *Composer) ConvertStep(s *ConvertStepParams) error {
 	var (
-		step               = c.Step
-		cfg                = c.Cfg
-		index              = c.Index
-		user               = c.User
-		userID             = c.UserID
-		invID              = c.InvID
-		workingDirHostPath = c.WorkingDirHostPath
-		availablePort      = c.AvailablePort
+		step               = s.Step
+		index              = s.Index
+		user               = s.User
+		workingDirHostPath = s.WorkingDirHostPath
+		availablePort      = s.AvailablePort
 	)
 
 	// Construct the name of the image
@@ -361,25 +386,24 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 		imageName = step.Component.Container.Image.Name
 	}
 
-	ingressID := IngressID(invID, userID)
-	redirectURL, err := FrontendURL(invID, ingressID, step, cfg)
+	redirectURL, err := c.FrontendURL(step)
 	if err != nil {
 		return err
 	}
 
 	step.Environment["IPLANT_USER"] = user
-	step.Environment["IPLANT_EXECUTION_ID"] = invID
+	step.Environment["IPLANT_EXECUTION_ID"] = c.job.InvocationID
 	step.Environment["REDIRECT_URL"] = redirectURL
 
 	var containername string
 	if step.Component.Container.Name != "" {
 		containername = step.Component.Container.Name
 	} else {
-		containername = fmt.Sprintf("step_%d_%s", index, invID)
+		containername = fmt.Sprintf("step_%d_%s", index, c.job.InvocationID)
 	}
 
 	indexstr := strconv.Itoa(index)
-	j.Services[fmt.Sprintf("step_%d", index)] = &Service{
+	c.composition.Services[fmt.Sprintf("step_%d", index)] = &Service{
 		Image:      imageName,
 		Command:    step.Arguments(),
 		WorkingDir: step.Component.Container.WorkingDirectory(),
@@ -400,7 +424,7 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 		Devices:       []string{},
 	}
 
-	svc := j.Services[fmt.Sprintf("step_%d", index)]
+	svc := c.composition.Services[fmt.Sprintf("step_%d", index)]
 	stepContainer := step.Component.Container
 
 	for _, cp := range step.Component.Container.Ports {
@@ -418,7 +442,7 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 	if stepContainer.MemoryLimit > 0 {
 		svc.MemLimit = fmt.Sprintf("%db", stepContainer.MemoryLimit)
 	} else {
-		svc.MemLimit = fmt.Sprintf("%db", cfg.GetInt64(ConfigMemoryLimitKey))
+		svc.MemLimit = fmt.Sprintf("%db", c.memoryLimit)
 	}
 
 	if stepContainer.CPUShares > 0 {
@@ -434,14 +458,14 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 	if stepContainer.MaxCPUCores > 0.0 {
 		svc.CPUs = fmt.Sprintf("%f", stepContainer.MaxCPUCores)
 	} else {
-		svc.CPUs = fmt.Sprintf("%f", cfg.GetFloat64(ConfigMaxCPUCoresKey))
+		svc.CPUs = fmt.Sprintf("%f", c.maxCPUCores)
 	}
 
 	// Handles volumes created by other containers.
 	for _, vf := range stepContainer.VolumesFrom {
-		containerName := fmt.Sprintf("%s-%s", vf.NamePrefix, invID)
+		containerName := fmt.Sprintf("%s-%s", vf.NamePrefix, c.job.InvocationID)
 		var foundService string
-		for svckey, svc := range j.Services { // svckey is the docker-compose service name.
+		for svckey, svc := range c.composition.Services { // svckey is the docker-compose service name.
 			if svc.ContainerName == containerName {
 				foundService = svckey
 			}
@@ -494,9 +518,9 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 		backendURL = step.Component.Container.InteractiveApps.BackendURL
 	} else {
 		if containerPort != 0 {
-			backendURL = fmt.Sprintf("http://step_%d_%s:%d", index, invID, containerPort)
+			backendURL = fmt.Sprintf("http://step_%d_%s:%d", index, c.job.InvocationID, containerPort)
 		} else {
-			backendURL = fmt.Sprintf("http://step_%d_%s", index, invID)
+			backendURL = fmt.Sprintf("http://step_%d_%s", index, c.job.InvocationID)
 		}
 	}
 
@@ -505,14 +529,14 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 		return err
 	}
 
-	frontendURL, err := FrontendURL(invID, ingressID, step, cfg)
+	frontendURL, err := c.FrontendURL(step)
 	if err != nil {
 		return err
 	}
 
 	// Add a service for the proxy container. Each step has a corresponding proxy.
-	proxyName := ProxyName(index, invID)
-	j.Services[ProxyServiceName(index)] = &Service{
+	proxyName := c.ProxyName(index)
+	c.composition.Services[ProxyServiceName(index)] = &Service{
 		Image: stepContainer.InteractiveApps.ProxyImage,
 		Command: []string{
 			"--backend-url", backendURL,
@@ -542,8 +566,8 @@ func (j *JobCompose) ConvertStep(c *ConvertStepParams) error {
 
 // ProxyName returns the name of the cas-proxy container based on the step index and the
 // job's invocationID.
-func ProxyName(index int, invocationID string) string {
-	return fmt.Sprintf("step_proxy_%d_%s", index, invocationID)
+func (c *Composer) ProxyName(index int) string {
+	return fmt.Sprintf("step_proxy_%d_%s", index, c.job.InvocationID)
 }
 
 // ProxyServiceName returns the docker-compose service name for the cas-proxy,

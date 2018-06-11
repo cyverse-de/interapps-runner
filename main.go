@@ -98,6 +98,9 @@ const (
 	// ConfigAMQPExchangeTypeKey is the key for the AMQP Exchange Type configuration
 	// setting.
 	ConfigAMQPExchangeTypeKey = "amqp.exchange.type"
+
+	// ConfigProxyTagKey is the key for the cas-proxy image tag.
+	ConfigProxyTagKey = "interapps.proxy.tag"
 )
 
 var (
@@ -140,7 +143,7 @@ type CleanableJob struct {
 	LocalWorkingDir string `json:"local_working_directory"`
 }
 
-func validateInteractive(job *model.Job) error {
+func validateInteractive(job *model.Job, tag string) error {
 	// Make sure at least one step is marked as interactive.
 	foundInteractive := false
 	for stepIndex, s := range job.Steps {
@@ -148,7 +151,7 @@ func validateInteractive(job *model.Job) error {
 			foundInteractive = true
 
 			if s.Component.Container.InteractiveApps.ProxyImage == "" {
-				job.Steps[stepIndex].Component.Container.InteractiveApps.ProxyImage = "discoenv/cas-proxy"
+				job.Steps[stepIndex].Component.Container.InteractiveApps.ProxyImage = fmt.Sprintf("discoenv/cas-proxy:%s", tag)
 			}
 
 			if s.Component.Container.InteractiveApps.ProxyName == "" {
@@ -265,6 +268,10 @@ func main() {
 		log.Fatal("the exposer url must be set either in the config file or with --exposer-url")
 	}
 
+	if cfg.GetString(ConfigProxyTagKey) == "" {
+		log.Fatal("the interapps.proxy.tag must be set in the config")
+	}
+
 	// prefer the command-line setting over the config setting.
 	if *exposerURL != "" {
 		cfg.Set(ConfigAppExposerBaseKey, *exposerURL)
@@ -309,7 +316,7 @@ func main() {
 
 	// Make sure that the job contains enough information to allow an interactive
 	// job to run successfully.
-	if err = validateInteractive(job); err != nil {
+	if err = validateInteractive(job, cfg.GetString(ConfigProxyTagKey)); err != nil {
 		log.Fatal(err)
 	}
 

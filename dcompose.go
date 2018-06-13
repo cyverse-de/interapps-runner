@@ -96,6 +96,7 @@ type Composer struct {
 	memoryLimit     int64
 	maxCPUCores     float64
 	frontendBaseURL string
+	ingressURL      string
 }
 
 // NewComposer returns a new *Composer.
@@ -112,6 +113,7 @@ func NewComposer(job *model.Job, cfg *viper.Viper, logDriver, pathPrefix string)
 		memoryLimit:     cfg.GetInt64(ConfigMemoryLimitKey),
 		maxCPUCores:     cfg.GetFloat64(ConfigMaxCPUCoresKey),
 		frontendBaseURL: cfg.GetString(ConfigFrontendBaseKey),
+		ingressURL:      cfg.GetString(ConfigAppExposerBaseKey),
 	}, nil
 }
 
@@ -544,6 +546,7 @@ func (c *Composer) ConvertStep(s *ConvertStepParams) error {
 			"--frontend-url", frontendURL,
 			"--cas-base-url", stepContainer.InteractiveApps.CASURL,
 			"--cas-validate", stepContainer.InteractiveApps.CASValidate,
+			"--ingress-url", c.ingressURL,
 		},
 		Labels: map[string]string{
 			model.DockerLabelKey: strconv.Itoa(StepContainer),

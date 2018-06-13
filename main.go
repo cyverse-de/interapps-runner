@@ -72,7 +72,7 @@ const (
 
 	// ConfigHostHeaderKey is the key for the app-exposer Host header configuration
 	// setting.
-	ConfigHostHeaderKey = "k8s.app-exposer.host-header"
+	ConfigHostHeaderKey = "k8s.app-exposer.header"
 
 	// ConfigVaultURLKey is the key for the Vault URL configuration setting.
 	ConfigVaultURLKey = "vault.url"

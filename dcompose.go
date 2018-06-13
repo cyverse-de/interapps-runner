@@ -550,6 +550,7 @@ func (c *Composer) ConvertStep(s *ConvertStepParams) error {
 			"--frontend-url", frontendURL,
 			"--cas-base-url", stepContainer.InteractiveApps.CASURL,
 			"--cas-validate", stepContainer.InteractiveApps.CASValidate,
+			"--external-id", c.job.InvocationID,
 			"--ingress-url", c.ingressURL,
 			"--analysis-header", c.analysisHeader,
 			"--access-header", c.accessHeader,

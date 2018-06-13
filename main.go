@@ -101,6 +101,14 @@ const (
 
 	// ConfigProxyTagKey is the key for the cas-proxy image tag.
 	ConfigProxyTagKey = "interapps.proxy.tag"
+
+	// ConfigAccessHeaderKey is the key for the check-resource-access header
+	// configuration setting.
+	ConfigAccessHeaderKey = "k8s.check-resource-access.header"
+
+	// ConfigAnalysisHeaderKey is the key for the get-analysis-id header
+	// configuration setting.
+	ConfigAnalysisHeaderKey = "k8s.get-analysis-id.header"
 )
 
 var (
@@ -187,7 +195,7 @@ func main() {
 		proxyUpper  = flag.Int("proxy-upper-bound", 31399, "Upper bound in port numbers that the proxy may be reached through.")
 		proxyLower  = flag.Int("proxy-lower-bound", 31300, "Lower bound in port numbers that the proxy may be reached through.")
 		exposerURL  = flag.String("exposer-url", "", "The base URL to the app-exposer service.")
-		exposerHost = flag.String("exposer-host-header", "app-exposer", "The value of the Host header in requests to the app-exposer API.")
+		exposerHost = flag.String("exposer-host-header", "", "The value of the Host header in requests to the app-exposer API.")
 		setfaclPath = flag.String("setfacl-path", "/usr/bin/setfacl", "The path to the setfacl binary")
 		maxCPUCores = flag.Float64("cpus", 0.0, "The default maximum amount of CPU cores that a tool can access.")
 		memoryLimit = flag.Int64("memory-limit", 0, "The default maximum amount of RAM (in bytes) that a tool can access.")
@@ -279,6 +287,18 @@ func main() {
 
 	if *exposerHost != "" {
 		cfg.Set(ConfigHostHeaderKey, *exposerHost)
+	} else {
+		if cfg.GetString(ConfigHostHeaderKey) == "" {
+			cfg.Set(ConfigHostHeaderKey, "app-exposer")
+		}
+	}
+
+	if cfg.GetString(ConfigAnalysisHeaderKey) == "" {
+		log.Fatal("the k8s.get-analysis-id.header must be set in the config")
+	}
+
+	if cfg.GetString(ConfigAccessHeaderKey) == "" {
+		log.Fatal("the k8s.check-resource-access.header must be set in the config")
 	}
 
 	if *memoryLimit != 0 {

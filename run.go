@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -11,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/kr/pty"
@@ -107,19 +105,11 @@ func (r *JobRunner) Init(ctx context.Context) error {
 	}
 
 	for _, step := range r.composer.job.Steps {
-		// The user ID recorded in the image is probably the user the container is
-		// going to run as, so we need to make sure that user can access the files
-		// in the working directory.
-		imgName := fmt.Sprintf(
-			"%s:%s",
-			step.Component.Container.Image.Name,
-			step.Component.Container.Image.Tag,
-		)
-		var imgUID int
-		imgUID, err = r.ImageUser(ctx, imgName)
-		if err != nil {
-			return err
-		}
+		// If the UID for the container is set, then we need to give permissions to
+		// it here so that the user can access files in the image. If it's not set,
+		// it will default to 0 which is effectively the default user for Docker
+		// anyway, so it won't make a difference here.
+		imgUID := step.Component.Container.UID
 
 		// This should enable the user recorded in the image to access the files in
 		// the bind mounted working volume. We have a default ACL that lets the user
@@ -299,19 +289,6 @@ func (r *JobRunner) downloadInputs(ctx context.Context) (messaging.StatusCode, e
 	}
 
 	return messaging.Success, nil
-}
-
-// ImageUser returns the UID of the image's default user, or 0 if it's not set.
-func (r *JobRunner) ImageUser(ctx context.Context, image string) (int, error) {
-	out, err := exec.CommandContext(ctx, r.dockerPath, "image", "inspect", "-f", "{{.Config.User}}", image).Output()
-	if err != nil {
-		return -1, err
-	}
-	out = bytes.TrimSpace(out)
-	if len(out) > 0 {
-		return strconv.Atoi(string(out))
-	}
-	return 0, nil
 }
 
 // AddWorkingVolumeACL adds an ACL for the given UID to the working directory

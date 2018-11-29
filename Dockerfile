@@ -5,7 +5,11 @@ RUN go get github.com/jstemmer/go-junit-report
 
 COPY . /go/src/github.com/cyverse-de/interapps-runner
 ENV CGO_ENABLED=0
-RUN go install github.com/cyverse-de/interapps-runner
+RUN wget https://github.com/upx/upx/releases/download/v3.95/upx-3.95-amd64_linux.tar.xz \
+ && tar -xJvf upx-3.95-amd64_linux.tar.xz upx-3.95-amd64_linux/upx \
+ && go install github.com/cyverse-de/interapps-runner \
+ && ./upx-3.95-amd64_linux/upx --ultra-brute /go/bin/interapps-runner \
+ && rm -rf upx-3.95-amd64_linux*
 
 ENTRYPOINT ["interapps-runner"]
 CMD ["--help"]

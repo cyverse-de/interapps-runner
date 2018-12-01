@@ -483,9 +483,7 @@ func (c *Composer) ConvertStep(s *ConvertStepParams) error {
 	svc.Volumes = append(svc.Volumes, strings.Join([]string{workingDirHostPath, stepContainer.WorkingDirectory(), "rw"}, ":"))
 
 	// The TMPDIR needs to be mounted as a volume
-	if !step.Component.Container.SkipTmpMount {
-		svc.Volumes = append(svc.Volumes, fmt.Sprintf("./%s:/tmp:rw", TMPDIR))
-	}
+	svc.Volumes = append(svc.Volumes, fmt.Sprintf("./%s:/tmp:rw", TMPDIR))
 
 	for _, v := range stepContainer.Volumes {
 		var rw string

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"gopkg.in/cyverse-de/messaging.v4"
+	"gopkg.in/cyverse-de/messaging.v6"
 )
 
 // Exit handles clean up when road-runner is killed.

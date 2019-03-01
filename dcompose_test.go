@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
-	"gopkg.in/cyverse-de/model.v3"
+	"gopkg.in/cyverse-de/model.v4"
 
 	yaml "gopkg.in/yaml.v2"
 )

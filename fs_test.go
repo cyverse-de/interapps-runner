@@ -11,7 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"gopkg.in/cyverse-de/model.v3"
+	"gopkg.in/cyverse-de/model.v4"
 )
 
 // copyJobFile copies the contents of from to a file called <uuid>.json inside

@@ -405,7 +405,7 @@ func (c *Composer) ConvertStep(s *ConvertStepParams) error {
 	if step.Component.Container.Name != "" {
 		containername = step.Component.Container.Name
 	} else {
-		containername = fmt.Sprintf("step_%d_%s", index, c.job.InvocationID)
+		containername = fmt.Sprintf("step-%d-%s", index, c.job.InvocationID)
 	}
 
 	indexstr := strconv.Itoa(index)

@@ -524,9 +524,9 @@ func (c *Composer) ConvertStep(s *ConvertStepParams) error {
 		backendURL = step.Component.Container.InteractiveApps.BackendURL
 	} else {
 		if containerPort != 0 {
-			backendURL = fmt.Sprintf("http://step_%d_%s:%d", index, c.job.InvocationID, containerPort)
+			backendURL = fmt.Sprintf("http://step-%d-%s:%d", index, c.job.InvocationID, containerPort)
 		} else {
-			backendURL = fmt.Sprintf("http://step_%d_%s", index, c.job.InvocationID)
+			backendURL = fmt.Sprintf("http://step-%d-%s", index, c.job.InvocationID)
 		}
 	}
 

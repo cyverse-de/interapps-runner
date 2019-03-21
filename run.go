@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/kr/pty"
 	"github.com/pkg/errors"
@@ -418,48 +421,7 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 
 		ingressID := r.composer.IngressID()
 
-		log.Printf("creating K8s endpoint %s\n", ingressID)
-		hostIP := GetOutboundIP()
-		eptcfg := &EndpointConfig{
-			IP:   hostIP.String(),
-			Name: ingressID,
-			Port: r.availablePort,
-		}
-		if err = CreateK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, eptcfg); err != nil {
-			running(r.client, r.composer.job, fmt.Sprintf("Error creating K8s Endpoint: %s", err.Error()))
-			DeleteK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, ingressID)
-			return messaging.StatusStepFailed, err
-		}
-		log.Printf("done creating K8s endpoint %s\n", ingressID)
-
-		log.Printf("creating K8s service %s\n", ingressID)
-		svccfg := &ServiceConfig{
-			TargetPort: r.availablePort,
-			Name:       ingressID,
-			ListenPort: 80,
-		}
-		if err = CreateK8SService(r.appExposerBaseURL, r.appExposerHeader, svccfg); err != nil {
-			running(r.client, r.composer.job, fmt.Sprintf("Error creating K8s Service: %s", err.Error()))
-			DeleteK8SService(r.appExposerBaseURL, r.appExposerHeader, ingressID)
-			DeleteK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, ingressID)
-			return messaging.StatusStepFailed, err
-		}
-		log.Printf("done creating K8s service %s\n", ingressID)
-
-		log.Printf("creating K8s ingress %s\n", ingressID)
-		ingcfg := &IngressConfig{
-			Service: ingressID,
-			Port:    80,
-			Name:    ingressID,
-		}
-		if err = CreateK8SIngress(r.appExposerBaseURL, r.appExposerHeader, ingcfg); err != nil {
-			running(r.client, r.composer.job, fmt.Sprintf("Error creating K8s Ingress: %s", err.Error()))
-			DeleteK8SIngress(r.appExposerBaseURL, r.appExposerHeader, ingressID)
-			DeleteK8SService(r.appExposerBaseURL, r.appExposerHeader, ingressID)
-			DeleteK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, ingressID)
-			return messaging.StatusStepFailed, err
-		}
-		log.Printf("done creating K8s ingress %s\n", ingressID)
+		go r.ConfigureK8s(ingressID)
 
 		svcname := fmt.Sprintf("step_%d", idx)
 		if err = r.execDockerCompose(ctx, svcname, os.Environ(), stdout, stderr); err != nil {
@@ -512,6 +474,90 @@ func (r *JobRunner) runAllSteps(parent context.Context) (messaging.StatusCode, e
 	}
 
 	return messaging.Success, nil
+}
+
+// ConfigureK8s calls into the Kubernetes API to set up and Endpoint, Service,
+// and Ingress entry for the job.
+func (r *JobRunner) ConfigureK8s(ingressID string) (messaging.StatusCode, error) {
+	var err error
+	var ready, ok bool
+
+	hostIP := GetOutboundIP()
+	u := fmt.Sprintf("http://%s:%d/url-ready", hostIP, r.availablePort)
+
+	for !ready {
+		resp, err := http.Get(u)
+		if err != nil {
+			log.Errorf("error checking url-ready: %s\n", err)
+		}
+
+		if !(resp.StatusCode >= 200 && resp.StatusCode <= 299) {
+			respbody, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				log.Errorf("error reading response body: %s", err.Error())
+			}
+			resp.Body.Close()
+			log.Errorf("status code in response was %d, body was: %s", resp.StatusCode, string(respbody))
+
+			bodymap := map[string]bool{}
+			if err = json.Unmarshal(respbody, &bodymap); err != nil {
+				log.Errorf("error unmarshalling json: %s\n", err)
+			}
+
+			ready, ok = bodymap["ready"]
+			if !ok {
+				ready = false
+			}
+
+		}
+		if !ready {
+			time.Sleep(5 * time.Second)
+		}
+	}
+
+	log.Printf("creating K8s endpoint %s\n", ingressID)
+	eptcfg := &EndpointConfig{
+		IP:   hostIP.String(),
+		Name: ingressID,
+		Port: r.availablePort,
+	}
+	if err = CreateK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, eptcfg); err != nil {
+		running(r.client, r.composer.job, fmt.Sprintf("Error creating K8s Endpoint: %s", err.Error()))
+		DeleteK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, ingressID)
+		return messaging.StatusStepFailed, err
+	}
+	log.Printf("done creating K8s endpoint %s\n", ingressID)
+
+	log.Printf("creating K8s service %s\n", ingressID)
+	svccfg := &ServiceConfig{
+		TargetPort: r.availablePort,
+		Name:       ingressID,
+		ListenPort: 80,
+	}
+	if err = CreateK8SService(r.appExposerBaseURL, r.appExposerHeader, svccfg); err != nil {
+		running(r.client, r.composer.job, fmt.Sprintf("Error creating K8s Service: %s", err.Error()))
+		DeleteK8SService(r.appExposerBaseURL, r.appExposerHeader, ingressID)
+		DeleteK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, ingressID)
+		return messaging.StatusStepFailed, err
+	}
+	log.Printf("done creating K8s service %s\n", ingressID)
+
+	log.Printf("creating K8s ingress %s\n", ingressID)
+	ingcfg := &IngressConfig{
+		Service: ingressID,
+		Port:    80,
+		Name:    ingressID,
+	}
+	if err = CreateK8SIngress(r.appExposerBaseURL, r.appExposerHeader, ingcfg); err != nil {
+		running(r.client, r.composer.job, fmt.Sprintf("Error creating K8s Ingress: %s", err.Error()))
+		DeleteK8SIngress(r.appExposerBaseURL, r.appExposerHeader, ingressID)
+		DeleteK8SService(r.appExposerBaseURL, r.appExposerHeader, ingressID)
+		DeleteK8SEndpoint(r.appExposerBaseURL, r.appExposerHeader, ingressID)
+		return messaging.StatusStepFailed, err
+	}
+	log.Printf("done creating K8s ingress %s\n", ingressID)
+
+	return messaging.Success, err
 }
 
 func (r *JobRunner) uploadOutputs() (messaging.StatusCode, error) {

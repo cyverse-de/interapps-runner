@@ -556,23 +556,23 @@ func (r *JobRunner) ConfigureK8s(ctx context.Context, ingressID string) (messagi
 		err = HTTPDo(ctx, req, func(resp *http.Response, err error) error {
 			if err != nil {
 				log.Errorf("error checking url-ready: %s\n", err)
-			}
+			} else {
+				if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+					respbody, err := ioutil.ReadAll(resp.Body)
+					if err != nil {
+						return fmt.Errorf("error reading response body: %s", err.Error())
+					}
+					resp.Body.Close()
 
-			if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-				respbody, err := ioutil.ReadAll(resp.Body)
-				if err != nil {
-					return fmt.Errorf("error reading response body: %s", err.Error())
-				}
-				resp.Body.Close()
+					bodymap := map[string]bool{}
+					if err = json.Unmarshal(respbody, &bodymap); err != nil {
+						return fmt.Errorf("error unmarshalling json: %s", err)
+					}
 
-				bodymap := map[string]bool{}
-				if err = json.Unmarshal(respbody, &bodymap); err != nil {
-					return fmt.Errorf("error unmarshalling json: %s", err)
-				}
-
-				ready, ok = bodymap["ready"]
-				if !ok {
-					ready = false
+					ready, ok = bodymap["ready"]
+					if !ok {
+						ready = false
+					}
 				}
 			}
 			return nil

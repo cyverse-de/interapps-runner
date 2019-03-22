@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -9,6 +10,25 @@ import (
 	"net/url"
 	"path"
 )
+
+// HTTPDo performs an HTTP request in a new goroutine with the provided context.
+// The request is performed synchronously. Adapted from: https://blog.golang.org/context.
+func HTTPDo(ctx context.Context, req *http.Request, f func(*http.Response, error) error) error {
+	c := make(chan error, 1)
+	req = req.WithContext(ctx)
+
+	go func() {
+		c <- f(http.DefaultClient.Do(req))
+	}()
+
+	select {
+	case <-ctx.Done():
+		<-c
+		return ctx.Err()
+	case err := <-c:
+		return err
+	}
+}
 
 // EndpointConfig contains the values needed to set up an Endpoints object in
 // the kubernetes cluster
@@ -34,7 +54,7 @@ type IngressConfig struct {
 	Name    string `json:",omit"`
 }
 
-func postToAPI(u, host string, cfg interface{}) error {
+func postToAPI(ctx context.Context, u, host string, cfg interface{}) error {
 	var (
 		b   []byte
 		err error
@@ -54,25 +74,26 @@ func postToAPI(u, host string, cfg interface{}) error {
 	// request.
 	req.Host = host
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if !(resp.StatusCode >= 200 && resp.StatusCode <= 299) {
-		respbody, err := ioutil.ReadAll(resp.Body)
+	err = HTTPDo(ctx, req, func(resp *http.Response, err error) error {
 		if err != nil {
-			return fmt.Errorf("error reading response body: %s", err.Error())
+			return err
 		}
 		defer resp.Body.Close()
-		return fmt.Errorf("status code in response was %d, body was: %s", resp.StatusCode, string(respbody))
-	}
 
-	return nil
+		if !(resp.StatusCode >= 200 && resp.StatusCode <= 299) {
+			respbody, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("error reading response body: %s", err.Error())
+			}
+			return fmt.Errorf("status code in response was %d, body was: %s", resp.StatusCode, string(respbody))
+		}
+		return nil
+	})
+
+	return err
 }
 
-func deleteToAPI(u, host string) error {
+func deleteToAPI(ctx context.Context, u, host string) error {
 	var err error
 
 	req, err := http.NewRequest(http.MethodDelete, u, nil)
@@ -82,83 +103,86 @@ func deleteToAPI(u, host string) error {
 
 	req.Host = host
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if !(resp.StatusCode >= 200 && resp.StatusCode <= 299) {
-		respbody, err := ioutil.ReadAll(resp.Body)
+	err = HTTPDo(ctx, req, func(resp *http.Response, err error) error {
 		if err != nil {
-			return fmt.Errorf("error reading response body: %s", err.Error())
+			return err
 		}
 		defer resp.Body.Close()
-		return fmt.Errorf("status code in response was %d, body was: %s", resp.StatusCode, string(respbody))
-	}
 
-	return nil
+		if !(resp.StatusCode >= 200 && resp.StatusCode <= 299) {
+			respbody, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("error reading response body: %s", err.Error())
+			}
+			defer resp.Body.Close()
+			return fmt.Errorf("status code in response was %d, body was: %s", resp.StatusCode, string(respbody))
+		}
+
+		return nil
+	})
+
+	return err
 }
 
 // CreateK8SEndpoint posts to the app-exposer API, which should create an
 // Endpoint in the Kubernetes cluster.
-func CreateK8SEndpoint(apiurl, host string, eptcfg *EndpointConfig) error {
+func CreateK8SEndpoint(ctx context.Context, apiurl, host string, eptcfg *EndpointConfig) error {
 	epturl, err := url.Parse(apiurl)
 	if err != nil {
 		return err
 	}
 	epturl.Path = path.Join(epturl.Path, "endpoint", eptcfg.Name)
-	return postToAPI(epturl.String(), host, eptcfg)
+	return postToAPI(ctx, epturl.String(), host, eptcfg)
 }
 
 // DeleteK8SEndpoint deletes a K8S endpoint through the app-exposer API.
-func DeleteK8SEndpoint(apiurl, host, name string) error {
+func DeleteK8SEndpoint(ctx context.Context, apiurl, host, name string) error {
 	epturl, err := url.Parse(apiurl)
 	if err != nil {
 		return err
 	}
 	epturl.Path = path.Join(epturl.Path, "endpoint", name)
-	return deleteToAPI(epturl.String(), host)
+	return deleteToAPI(ctx, epturl.String(), host)
 }
 
 // CreateK8SService posts to the app-exposer API, which should create a
 // Service in the Kubernetes cluster.
-func CreateK8SService(apiurl, host string, svccfg *ServiceConfig) error {
+func CreateK8SService(ctx context.Context, apiurl, host string, svccfg *ServiceConfig) error {
 	svcurl, err := url.Parse(apiurl)
 	if err != nil {
 		return err
 	}
 	svcurl.Path = path.Join(svcurl.Path, "service", svccfg.Name)
-	return postToAPI(svcurl.String(), host, svccfg)
+	return postToAPI(ctx, svcurl.String(), host, svccfg)
 }
 
 // DeleteK8SService deletes a K8S service through the app-exposer API.
-func DeleteK8SService(apiurl, host, name string) error {
+func DeleteK8SService(ctx context.Context, apiurl, host, name string) error {
 	svcurl, err := url.Parse(apiurl)
 	if err != nil {
 		return err
 	}
 	svcurl.Path = path.Join(svcurl.Path, "service", name)
-	return deleteToAPI(svcurl.String(), host)
+	return deleteToAPI(ctx, svcurl.String(), host)
 }
 
 // CreateK8SIngress posts to the app-exposer API, which should create an
 // Ingress in the Kubernetes cluster.
-func CreateK8SIngress(apiurl, host string, ingcfg *IngressConfig) error {
+func CreateK8SIngress(ctx context.Context, apiurl, host string, ingcfg *IngressConfig) error {
 	ingurl, err := url.Parse(apiurl)
 	if err != nil {
 		return err
 	}
 	ingurl.Path = path.Join(ingurl.Path, "ingress", ingcfg.Name)
-	return postToAPI(ingurl.String(), host, ingcfg)
+	return postToAPI(ctx, ingurl.String(), host, ingcfg)
 }
 
 // DeleteK8SIngress deletes a K8S ingress through the app-exposer API.
-func DeleteK8SIngress(apiurl, host, name string) error {
+func DeleteK8SIngress(ctx context.Context, apiurl, host, name string) error {
 	ingurl, err := url.Parse(apiurl)
 	if err != nil {
 		return err
 	}
 	ingurl.Path = path.Join(ingurl.Path, "ingress", name)
-	return deleteToAPI(ingurl.String(), host)
+	return deleteToAPI(ctx, ingurl.String(), host)
 }

@@ -23,8 +23,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
-	"gopkg.in/cyverse-de/messaging.v6"
-	"gopkg.in/cyverse-de/model.v4"
+	"gopkg.in/cyverse-de/messaging.v8"
+	"gopkg.in/cyverse-de/model.v5"
 
 	"github.com/spf13/viper"
 )

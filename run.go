@@ -19,8 +19,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"gopkg.in/cyverse-de/messaging.v6"
-	"gopkg.in/cyverse-de/model.v4"
+	"gopkg.in/cyverse-de/messaging.v8"
+	"gopkg.in/cyverse-de/model.v5"
 )
 
 // logrusProxyWriter will prevent

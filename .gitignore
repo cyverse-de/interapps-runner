@@ -2,3 +2,4 @@ interapps-runner
 test-configs/
 workingvolume/
 irods-config*
+vendor/

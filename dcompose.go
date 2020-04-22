@@ -11,12 +11,15 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
-	"gopkg.in/cyverse-de/model.v4"
+	"gopkg.in/cyverse-de/model.v5"
 )
 
 // WORKDIR is the path to the working directory inside all of the containers
 // that are run as part of a job.
 const WORKDIR = "/de-app-work"
+
+// IRODSCONFIGNAME is the basename of the irods config file
+const IRODSCONFIGNAME = "irods-config"
 
 // CONFIGDIR is the path to the local configs inside the containers that are
 // used to transfer files into and out of the job.
@@ -225,7 +228,7 @@ func (c *Composer) InitFromJob(workingdir string, availablePort int) error {
 	var err error
 
 	workingVolumeHostPath := path.Join(workingdir, VOLUMEDIR)
-	// The volume containing the local working directory
+	irodsConfigPath := path.Join(workingdir, IRODSCONFIGNAME)
 
 	porklockImageName := fmt.Sprintf("%s:%s", c.porklockImage, c.porklockTag)
 
@@ -261,13 +264,12 @@ func (c *Composer) InitFromJob(workingdir string, availablePort int) error {
 			Image:   porklockImageName,
 			Command: input.Arguments(job.Submitter, job.FileMetadata),
 			Environment: map[string]string{
-				"VAULT_ADDR":  "${VAULT_ADDR}",
-				"VAULT_TOKEN": "${VAULT_TOKEN}",
-				"JOB_UUID":    job.InvocationID,
+				"JOB_UUID": job.InvocationID,
 			},
 			WorkingDir: WORKDIR,
 			Volumes: []string{
 				strings.Join([]string{workingVolumeHostPath, WORKDIR, "rw"}, ":"),
+				strings.Join([]string{irodsConfigPath, path.Join(CONFIGDIR, IRODSCONFIGNAME), "ro"}, ":"),
 			},
 			Labels: map[string]string{
 				model.DockerLabelKey: strconv.Itoa(InputContainer),
@@ -300,13 +302,12 @@ func (c *Composer) InitFromJob(workingdir string, availablePort int) error {
 		Image:   porklockImageName,
 		Command: job.FinalOutputArguments(excludesMount),
 		Environment: map[string]string{
-			"VAULT_ADDR":  "${VAULT_ADDR}",
-			"VAULT_TOKEN": "${VAULT_TOKEN}",
-			"JOB_UUID":    job.InvocationID,
+			"JOB_UUID": job.InvocationID,
 		},
 		WorkingDir: WORKDIR,
 		Volumes: []string{
 			strings.Join([]string{workingVolumeHostPath, WORKDIR, "rw"}, ":"),
+			strings.Join([]string{irodsConfigPath, path.Join(CONFIGDIR, IRODSCONFIGNAME), "ro"}, ":"),
 			strings.Join([]string{excludesPath, excludesMount, "ro"}, ":"),
 		},
 		Labels: map[string]string{

@@ -19,8 +19,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"gopkg.in/cyverse-de/messaging.v6"
-	"gopkg.in/cyverse-de/model.v4"
+	"gopkg.in/cyverse-de/messaging.v8"
+	"gopkg.in/cyverse-de/model.v5"
 )
 
 // logrusProxyWriter will prevent
@@ -55,8 +55,6 @@ type JobRunner struct {
 	availablePort     int
 	dockerPath        string
 	dockerComposePath string
-	vaultURL          string
-	vaultToken        string
 	setfaclPath       string
 	appExposerBaseURL string
 	appExposerHeader  string
@@ -80,8 +78,6 @@ func NewJobRunner(client JobUpdatePublisher, cfg *viper.Viper, c *Composer, exit
 		availablePort:     availablePort,
 		dockerPath:        cfg.GetString(ConfigDockerPathKey),
 		dockerComposePath: cfg.GetString(ConfigDockerComposePathKey),
-		vaultURL:          cfg.GetString(ConfigVaultURLKey),
-		vaultToken:        cfg.GetString(ConfigVaultTokenKey),
 		setfaclPath:       cfg.GetString(ConfigSetfaclPathKey),
 		appExposerBaseURL: cfg.GetString(ConfigAppExposerBaseKey),
 		appExposerHeader:  cfg.GetString(ConfigHostHeaderKey),
@@ -261,8 +257,6 @@ func (r *JobRunner) downloadInputs(ctx context.Context) (messaging.StatusCode, e
 	var exitCode int64
 
 	env := os.Environ()
-	env = append(env, fmt.Sprintf("VAULT_ADDR=%s", r.vaultURL))
-	env = append(env, fmt.Sprintf("VAULT_TOKEN=%s", r.vaultToken))
 
 	for index, input := range r.composer.job.Inputs() {
 		running(r.client, r.composer.job, fmt.Sprintf("Downloading %s", input.IRODSPath()))
@@ -548,7 +542,8 @@ func (r *JobRunner) ConfigureK8s(ctx context.Context, ingressID string) (messagi
 	u := fmt.Sprintf("http://%s:%d/url-ready", hostIP, r.availablePort)
 
 	for !ready {
-		req, err := http.NewRequest(http.MethodGet, u, nil)
+		var req *http.Request
+		req, err = http.NewRequest(http.MethodGet, u, nil)
 		if err != nil {
 			return messaging.StatusStepFailed, err
 		}
@@ -647,10 +642,7 @@ func (r *JobRunner) uploadOutputs() (messaging.StatusCode, error) {
 	}
 	defer stderr.Close()
 
-	env := []string{
-		fmt.Sprintf("VAULT_ADDR=%s", r.vaultURL),
-		fmt.Sprintf("VAULT_TOKEN=%s", r.vaultToken),
-	}
+	env := []string{}
 
 	// We're using the background context so that this stuff will run even when
 	// the job is cancelled.

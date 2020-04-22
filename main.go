@@ -23,8 +23,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
-	"gopkg.in/cyverse-de/messaging.v6"
-	"gopkg.in/cyverse-de/model.v4"
+	"gopkg.in/cyverse-de/messaging.v8"
+	"gopkg.in/cyverse-de/model.v5"
 
 	"github.com/spf13/viper"
 )
@@ -73,12 +73,6 @@ const (
 	// ConfigHostHeaderKey is the key for the app-exposer Host header configuration
 	// setting.
 	ConfigHostHeaderKey = "k8s.app-exposer.header"
-
-	// ConfigVaultURLKey is the key for the Vault URL configuration setting.
-	ConfigVaultURLKey = "vault.url"
-
-	// ConfigVaultTokenKey is the key for the Vault token configuration setting.
-	ConfigVaultTokenKey = "vault.token"
 
 	// ConfigPorklockImageKey is the key for the porklock image configuration
 	// setting.

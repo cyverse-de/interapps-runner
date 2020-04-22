@@ -9,7 +9,7 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
-	"gopkg.in/cyverse-de/model.v4"
+	"gopkg.in/cyverse-de/model.v5"
 )
 
 // adapted from https://talks.golang.org/2012/10things.slide#8

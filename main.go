@@ -74,12 +74,6 @@ const (
 	// setting.
 	ConfigHostHeaderKey = "k8s.app-exposer.header"
 
-	// ConfigVaultURLKey is the key for the Vault URL configuration setting.
-	ConfigVaultURLKey = "vault.url"
-
-	// ConfigVaultTokenKey is the key for the Vault token configuration setting.
-	ConfigVaultTokenKey = "vault.token"
-
 	// ConfigPorklockImageKey is the key for the porklock image configuration
 	// setting.
 	ConfigPorklockImageKey = "porklock.image"

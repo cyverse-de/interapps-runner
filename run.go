@@ -542,7 +542,8 @@ func (r *JobRunner) ConfigureK8s(ctx context.Context, ingressID string) (messagi
 	u := fmt.Sprintf("http://%s:%d/url-ready", hostIP, r.availablePort)
 
 	for !ready {
-		req, err := http.NewRequest(http.MethodGet, u, nil)
+		var req *http.Request
+		req, err = http.NewRequest(http.MethodGet, u, nil)
 		if err != nil {
 			return messaging.StatusStepFailed, err
 		}

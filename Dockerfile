@@ -8,6 +8,8 @@ ENV CGO_ENABLED=0
 RUN wget https://github.com/upx/upx/releases/download/v3.95/upx-3.95-amd64_linux.tar.xz \
  && tar -xJvf upx-3.95-amd64_linux.tar.xz upx-3.95-amd64_linux/upx \
  && cd /go/src/github.com/cyverse-de/interapps-runner \
+ && rm -rf vendor \
+ && go mod vendor \
  && go install ./... \
  && cd - \
  && ./upx-3.95-amd64_linux/upx --ultra-brute /go/bin/interapps-runner \

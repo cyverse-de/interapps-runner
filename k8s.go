@@ -69,6 +69,7 @@ func postToAPI(ctx context.Context, u, host string, cfg interface{}) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	// Make sure the Host header is set so the Ingress knows how to route the
 	// request.
